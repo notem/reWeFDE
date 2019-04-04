@@ -1,0 +1,5 @@
+statsmodels
+numpy
+scipy
+scikit-monaco
+pypmc
