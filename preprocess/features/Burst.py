@@ -1,4 +1,4 @@
-from common import X
+from features.common import X
 
 # knn feature (share similarity with interval)
 # the burst of inflow traffic

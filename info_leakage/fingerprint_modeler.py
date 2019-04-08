@@ -2,11 +2,14 @@
 import math
 import numpy as np
 
-from statsmodels.api.nonparametric import KDEMultivariate
-from statsmodels.api.nonparametric import KDEMultivariateConditional
+from awkde.awkde import GaussianKDE
+from statsmodels.nonparametric.kernel_density import KDEMultivariateConditional
 
 
 class WebsiteData(object):
+    """
+    Object-wrapper to conveniently manage dataset
+    """
 
     def __init__(self, X, Y):
         self.X = X
@@ -22,6 +25,39 @@ class WebsiteData(object):
         return self.X[f, :]
 
 
+class ConditionalKDE(object):
+    """
+    Implementation of a conditional probability density
+        function using awkde GaussianKDE as the estimators
+    Conditional KDE defined as:
+        f(y|x) = f(x,y)/f(x)
+    """
+
+    def __init__(self, dep, indep):
+        dep = np.reshape(dep, (dep.shape[0], 1))
+        indep = np.reshape(indep, (indep.shape[0], 1))
+        joint = np.hstack((dep, indep))
+
+        self.joint = GaussianKDE()
+        self.indep = GaussianKDE()
+
+        self.joint.fit(joint)
+        self.indep.fit(indep)
+
+    def pdf(self, dep, indep):
+        # dep = np.array(dep)
+        # indep = np.array(indep)
+        #
+        joint = np.reshape(np.array([dep[0], indep[0]]), (1, 2))
+        indep = np.reshape(np.array([indep]), (1, 1))
+
+        xy = self.joint.predict(joint)
+        x = self.indep.predict(indep)
+        pred = np.divide(xy, x, out=np.zeros_like(xy), where=(x != 0))
+
+        return pred
+
+
 class WebsiteFingerprintModeler(object):
 
     def __init__(self, X, Y):
@@ -33,39 +69,27 @@ class WebsiteFingerprintModeler(object):
 
     def _model_individual(self, feature, site=None):
         """
-        produce KDE for a single feature or single feature for a particular site
+        Produce KDE for a single feature or single feature for a particular site
         """
         if site:
+            # pdf(f|c)
             X = self.data.get_site(site)[:, feature]
         else:
+            # pdf(f)
             X = self.data.X[:, feature]
-        X = X.flatten()
-        var_type = 'c'
-        kde = KDEMultivariate(data=X,
-                              var_type=var_type,
-                              bw='normal_reference')
+        X = np.reshape(X, (X.shape[0], 1))
+        kde = GaussianKDE()
+        kde.fit(X)
         return kde
 
     def _model_conditionals(self, feature):
         """
-        Produce conditional pdfs for C|f and f|c
+        Produce conditional pdfs for C|f
         """
         X = self.data.X[:, feature]
         Y = self.data.Y
-
-        # pdf(C|f)
-        skde = KDEMultivariateConditional(endog=Y,   # dependent var
-                                          exog=X,    # independent var
-                                          dep_type="d",
-                                          indep_type="c",
-                                          bw='normal_reference')
-        # pdf(f|c)
-        fkde = KDEMultivariateConditional(endog=X,   # dependent var
-                                          exog=Y,    # independent var
-                                          dep_type="c",
-                                          indep_type="d",
-                                          bw='normal_reference')
-        return skde, fkde
+        kde = ConditionalKDE(dep=Y, indep=X)
+        return kde
 
     @staticmethod
     def _calculate_entropy(probs):
@@ -74,23 +98,25 @@ class WebsiteFingerprintModeler(object):
         """
         # Shannon Entropy func: -p(x)*log2(p(x))
         e = lambda i: -probs[i] * math.log2(probs[i])
-        sequence = [e(i) for i in range(len(probs)) if probs[i] != 0]
+        sequence = [e(i) for i in range(len(probs)) if probs[i] > 0]
         return sum(sequence)
 
-    def _sample(self, feature_kde, web_priors, sample_size):
+    def _sample(self, feature, web_priors, sample_size):
         """
         Select samples for monte-carlo evaluation
         """
         samples = []
         for i, site in enumerate(self.data.sites):
+
             # n = k * pr(c[i]) -- number of samples per site
-            num = sample_size*web_priors[i]
+            num = int(sample_size*web_priors[i])
+
+            # distribution pdf(f|c[i])
+            kde = self._model_individual(feature=feature, site=site)
 
             # sample from pdf(f|c[i])
-            for _ in range(num):
-                # select random sample of feature given the current site
-                x = 0  # TODO - sample from feature_kde?
-                samples.append(x)
+            x = kde.sample(n_samples=num)
+            samples.extend(x)
 
         return samples
 
@@ -99,20 +125,28 @@ class WebsiteFingerprintModeler(object):
         Evaluate the information leakage.
         """
         # create pdf for sampling and probability calculations
-        skde, fkde = self._model_conditionals(feature)
+        skde = self._model_conditionals(feature)
 
         # H(C) -- compute website entropy
         website_priors = [1/len(self.data.sites) for _ in self.data.sites]
         H_C = self._calculate_entropy(website_priors)
 
         # H(C|f) -- compute conditional entropy via monte-carlo
-        samples = self._sample(fkde, website_priors, sample_size)
+        samples = self._sample(feature, website_priors, sample_size)
         H_CF = 0
-        for sample in samples:
-            priors = [skde.pdf([site], [sample]) for site in self.data.sites]
-            H_CF += self._calculate_entropy(priors)
+        for i, sample in enumerate(samples):
+            print("\tcomputing monte-carlo sample: {}".format(i), end="\r")
+            probs = [skde.pdf([site], [sample]).tolist()[0] for site in self.data.sites]
+            entropy = self._calculate_entropy(probs)
+            H_CF += entropy
         H_CF /= sample_size
 
         # I = H(C) - H(C|f)
-        return H_C - H_CF
+        leakage = H_C - H_CF
+
+        # debug output
+        print("\tH(C) = {}".format(H_CF))
+        print("\tH(C|f) = {}".format(H_CF))
+        print("\tI(C;f) = {}".format(leakage))
+        return leakage
 

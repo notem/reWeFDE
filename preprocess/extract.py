@@ -5,7 +5,8 @@ import os
 import util
 import argparse
 import multiprocessing
-from preprocess.features import *
+import sys
+from features import *
 from util import FEATURE_EXT, BATCH_NUM, DEBUG_FLAG, NORMALIZE_TRAFFIC, PACKET_NUMBER, PKT_TIME, UNIQUE_PACKET_LENGTH, \
     NGRAM_ENABLE, TRANS_POSITION, PACKET_DISTRIBUTION, BURSTS, FIRST20, CUMUL, FIRST30_PKT_NUM, LAST30_PKT_NUM, \
     PKT_PER_SECOND, INTERVAL_KNN, INTERVAL_ICICS, INTERVAL_WPES11, howlong, featureCount
@@ -24,8 +25,6 @@ def create_file(dir_file, out_path):
     dest_dir = os.path.dirname(dest_path)
     if not os.path.exists(dest_dir):
         os.makedirs(dest_dir)
-
-    os.mknod(dest_path)
     return dest_path
 
 
@@ -39,10 +38,9 @@ def enumerate_files(dir):
         if "logs" in dirnames:
             dirnames.remove("logs")
         # if file exists
-        if len(filenames) != 0:
-            for filename in filenames:
-                fulldir = os.path.join(dirname, filename)
-                file_list.append(fulldir)
+        for filename in filenames:
+            fulldir = os.path.join(dirname, filename)
+            file_list.append(fulldir)
     return file_list
 
 
@@ -172,6 +170,8 @@ def batch_handler(file_list, out_path):
                     x = x.split("\t")
                     times.append(float(x[0]))
                     sizes.append(int(x[1]))
+            except KeyboardInterrupt:
+                sys.exit(-1)
             except:
                 pass
 
@@ -186,9 +186,11 @@ def batch_handler(file_list, out_path):
         features = []
         try:
             extract(times, sizes, features, debug_path=out_path)
-        except:
-            print("error occured:", filepath)
-            continue
+        except KeyboardInterrupt:
+            sys.exit(-1)
+        #except Exception as exc:
+        #    print("error occured:", filepath, exc)
+        #    continue
 
         dest = create_file(filepath, out_path)
         with open(dest, "w") as fout:
@@ -210,7 +212,7 @@ def main(trace_path, out_path):
 
     # split into BATCH_NUM files
     flist_batch = [[]] * BATCH_NUM
-    for idx, each_file in enumerate_files(file_list):
+    for idx, each_file in enumerate(file_list):
         bdx = idx % BATCH_NUM
         flist_batch[bdx].append(each_file)
 
@@ -230,9 +232,9 @@ def parse_args():
     parse command line arguments
     """
     parser = argparse.ArgumentParser("Process traces into features lists.")
-    parser.add_argument("-t", "--traces", required=False)
+    parser.add_argument("-t", "--traces", required=True)
+    parser.add_argument("-o", "--output", required=True)
     parser.add_argument("-e", "--extension", required=False)
-    parser.add_argument("-o", "--output", required=False)
     return parser.parse_args()
 
 

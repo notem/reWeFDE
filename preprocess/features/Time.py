@@ -1,5 +1,5 @@
 import numpy
-from common import X
+from features.common import X
 
 
 # max, mean, std, quartile

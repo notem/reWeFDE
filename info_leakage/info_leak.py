@@ -14,8 +14,10 @@ def info_leakage(X, Y):
     """
     leakage = []
     fingerprinter = WebsiteFingerprintModeler(X, Y)
-    for i in range(X.shape()[1]):
-        leakage[i] = fingerprinter.individual_leakage(i)
+    for i in range(X.shape[1]):
+        print("Processing leakage for feature #{}...".format(i))
+        leakage.append(fingerprinter.individual_leakage(i))
+    return leakage
 
 
 def load_data(directory):
@@ -31,7 +33,8 @@ def load_data(directory):
         for file in files:
             cls, ins = file.split("-")
             with open(os.path.join(root, file), "r") as csvFile:
-                features = np.array(list(csv.reader(csvFile))).squeeze()
+                features = [float(f) for f in list(csv.reader(csvFile, delimiter=' '))[0] if f]
+                features = np.array(features)
                 X.append(features)
                 Y.append(int(cls))
     return np.array(X), np.array(Y)
@@ -43,12 +46,12 @@ def parse_args():
     Accepted arguments:
       (t)races -- directory which contains feature files
     """
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser("")
     parser.add_argument("-t", "--traces")
     return parser.parse_args()
 
 
-def main():
+if __name__ == "__main__":
     """
     Program entrypoint
     """

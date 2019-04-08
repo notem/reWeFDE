@@ -20,7 +20,7 @@ def PktSecFeature(times, sizes, features, howlong):
     bucket_num = 20
     bucket = [0] * bucket_num
     for i in range(0, howlong):
-        ib = i / (howlong / bucket_num)
+        ib = i // (howlong // bucket_num)
         bucket[ib] = bucket[ib] + count[i]
     features.extend(bucket)
     features.append(numpy.sum(bucket))

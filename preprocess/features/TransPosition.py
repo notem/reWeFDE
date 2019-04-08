@@ -1,5 +1,5 @@
 import numpy
-from common import X
+from features.common import X
 
 
 # Transpositions (similar to good distance scheme)

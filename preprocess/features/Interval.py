@@ -1,5 +1,5 @@
 # inflow interval (icics, knn)
-from common import X
+from features.common import X
 
 
 def IntervalFeature(times, sizes, features, Category):

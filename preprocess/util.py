@@ -3,7 +3,7 @@
 FEATURE_EXT = ".features"
 BATCH_NUM = 32
 DEBUG_FLAG = True
-NORMALIZE_TRAFFIC = 1
+NORMALIZE_TRAFFIC = 0
 
 # turn on/off debug:
 PACKET_NUMBER = True

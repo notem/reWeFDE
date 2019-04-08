@@ -1,4 +1,4 @@
-from common import X
+from features.common import X
 
 
 def First20(times, sizes, features):
