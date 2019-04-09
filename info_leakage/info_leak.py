@@ -5,6 +5,7 @@ import argparse
 import numpy as np
 import csv
 import os
+import sys
 from fingerprint_modeler import WebsiteFingerprintModeler
 
 
@@ -16,27 +17,36 @@ def info_leakage(X, Y):
     fingerprinter = WebsiteFingerprintModeler(X, Y)
     for i in range(X.shape[1]):
         print("Processing leakage for feature #{}...".format(i))
-        leakage.append(fingerprinter.individual_leakage(i))
+        try:
+            leakage.append(fingerprinter.individual_leakage(i))
+        except KeyboardInterrupt:
+            sys.exit(-1)
+        except Exception as exc:
+            print("=> Failed to estimate leakage: {}".format(exc))
     return leakage
 
 
-def load_data(directory):
+def load_data(directory, extension='.features', delimiter=' '):
     """
     Load feature files from feature directory
-    :return X - numpy array of data instances (shape {n,f})
-    :return Y - numpy array of data labels (shape {n,1})
+    :return X - numpy array of data instances w/ shape (n,f)
+    :return Y - numpy array of data labels w/ shape (n,1)
     """
-    X = []
-    Y = []
+    X = []  # feature instances
+    Y = []  # site labels
     for root, dirs, files in os.walk(directory):
-        files = [fi for fi in files if fi.endswith(".features")]    # filter
+
+        # filter for feature files
+        files = [fi for fi in files if fi.endswith(extension)]
+
+        # read each feature file as CSV
         for file in files:
             cls, ins = file.split("-")
             with open(os.path.join(root, file), "r") as csvFile:
-                features = [float(f) for f in list(csv.reader(csvFile, delimiter=' '))[0] if f]
-                features = np.array(features)
+                features = [float(f) for f in list(csv.reader(csvFile, delimiter=delimiter))[0] if f]
                 X.append(features)
                 Y.append(int(cls))
+
     return np.array(X), np.array(Y)
 
 

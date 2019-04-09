@@ -1,9 +1,7 @@
 
 import math
 import numpy as np
-
 from awkde.awkde import GaussianKDE
-from statsmodels.nonparametric.kernel_density import KDEMultivariateConditional
 
 
 class WebsiteData(object):
@@ -25,39 +23,6 @@ class WebsiteData(object):
         return self.X[f, :]
 
 
-class ConditionalKDE(object):
-    """
-    Implementation of a conditional probability density
-        function using awkde GaussianKDE as the estimators
-    Conditional KDE defined as:
-        f(y|x) = f(x,y)/f(x)
-    """
-
-    def __init__(self, dep, indep):
-        dep = np.reshape(dep, (dep.shape[0], 1))
-        indep = np.reshape(indep, (indep.shape[0], 1))
-        joint = np.hstack((dep, indep))
-
-        self.joint = GaussianKDE()
-        self.indep = GaussianKDE()
-
-        self.joint.fit(joint)
-        self.indep.fit(indep)
-
-    def pdf(self, dep, indep):
-        # dep = np.array(dep)
-        # indep = np.array(indep)
-        #
-        joint = np.reshape(np.array([dep[0], indep[0]]), (1, 2))
-        indep = np.reshape(np.array([indep]), (1, 1))
-
-        xy = self.joint.predict(joint)
-        x = self.indep.predict(indep)
-        pred = np.divide(xy, x, out=np.zeros_like(xy), where=(x != 0))
-
-        return pred
-
-
 class WebsiteFingerprintModeler(object):
 
     def __init__(self, X, Y):
@@ -69,7 +34,7 @@ class WebsiteFingerprintModeler(object):
 
     def _model_individual(self, feature, site=None):
         """
-        Produce KDE for a single feature or single feature for a particular site
+        Produce AKDE for a single feature or single feature for a particular site
         """
         if site:
             # pdf(f|c)
@@ -82,28 +47,24 @@ class WebsiteFingerprintModeler(object):
         kde.fit(X)
         return kde
 
-    def _model_conditionals(self, feature):
+    def _model_joint(self, feature):
         """
-        Produce conditional pdfs for C|f
+        Produce AKDE for joint distributions
         """
         X = self.data.X[:, feature]
+        X = np.reshape(X, (X.shape[0], 1))
         Y = self.data.Y
-        kde = ConditionalKDE(dep=Y, indep=X)
-        return kde
+        Y = np.reshape(Y, (Y.shape[0], 1))
 
-    @staticmethod
-    def _calculate_entropy(probs):
-        """
-        Compute the Shannon entropy given probabilities
-        """
-        # Shannon Entropy func: -p(x)*log2(p(x))
-        e = lambda i: -probs[i] * math.log2(probs[i])
-        sequence = [e(i) for i in range(len(probs)) if probs[i] > 0]
-        return sum(sequence)
+        joint = np.hstack((Y, X))
+
+        kde = GaussianKDE()
+        kde.fit(joint)
+        return kde
 
     def _sample(self, feature, web_priors, sample_size):
         """
-        Select samples for monte-carlo evaluation
+        Select samples for monte-carlo evaluation.
         """
         samples = []
         for i, site in enumerate(self.data.sites):
@@ -111,42 +72,71 @@ class WebsiteFingerprintModeler(object):
             # n = k * pr(c[i]) -- number of samples per site
             num = int(sample_size*web_priors[i])
 
-            # distribution pdf(f|c[i])
-            kde = self._model_individual(feature=feature, site=site)
+            try:
+                # distribution pdf(f|c[i])
+                kde = self._model_individual(feature=feature, site=site)
 
-            # sample from pdf(f|c[i])
-            x = kde.sample(n_samples=num)
-            samples.extend(x)
+                # sample from pdf(f|c[i])
+                x = kde.sample(n_samples=num)
+                samples.extend(x)
+
+            except np.linalg.LinAlgError:
+                pass    # don't sample if KDE creation failed
 
         return samples
 
-    def individual_leakage(self, feature, sample_size=5000):
+    def individual_leakage(self, feature, sample_size=1000):
         """
         Evaluate the information leakage.
         """
         # create pdf for sampling and probability calculations
-        skde = self._model_conditionals(feature)
+        jkde = self._model_joint(feature)
+        mkde = self._model_individual(feature)
+
+        # Shannon Entropy func: -p(x)*log2(p(x))
+        h = lambda x: -x * math.log2(x)
 
         # H(C) -- compute website entropy
         website_priors = [1/len(self.data.sites) for _ in self.data.sites]
-        H_C = self._calculate_entropy(website_priors)
+        sequence = [h(prior) for prior in website_priors if prior > 0]
+        H_C = sum(sequence)
+
+        # performing sampling for monte-carlo evaluation of H(C|f)
+        #samples = self._sample(feature, website_priors, sample_size)    # author's method
+        samples = mkde.sample(sample_size)                              # from generic distribution
+
+        # compute conditional entropy for each sample
+        entropies = []
+        for i, sample in enumerate(samples):
+            print("=> generating monte-carlo sample: {}".format(i), end="\r")
+
+            # p(x,y) -- compute joint probability for all sites
+            joint_probs = [jkde.predict([site, sample]).tolist() for site in self.data.sites]
+            joint_probs = [prob for sublist in joint_probs for prob in sublist]
+
+            # p(x) -- compute marginal probability
+            marginal_prob = mkde.predict([sample])
+
+            # p(y|x) = p(x,y)/p(x) -- compute conditional probability
+            # see: https://en.wikipedia.org/wiki/Conditional_probability_distribution
+            conditional_probs = [prob/marginal_prob for prob in joint_probs]
+
+            # compute entropy
+            # see: https://en.wikipedia.org/wiki/C0.41581063onditional_entropy
+            entropy = sum([h(prob) for prob in conditional_probs])
+            entropies.append(entropy)
 
         # H(C|f) -- compute conditional entropy via monte-carlo
-        samples = self._sample(feature, website_priors, sample_size)
-        H_CF = 0
-        for i, sample in enumerate(samples):
-            print("\tcomputing monte-carlo sample: {}".format(i), end="\r")
-            probs = [skde.pdf([site], [sample]).tolist()[0] for site in self.data.sites]
-            entropy = self._calculate_entropy(probs)
-            H_CF += entropy
-        H_CF /= sample_size
+        # see: https://en.wikipedia.org/wiki/Monte_Carlo_integration#Importance_sampling_algorithm
+        H_CF = sum(entropies)/len(entropies)
 
-        # I = H(C) - H(C|f)
+        # I(C;f) = H(C) - H(C|f) -- compute information leakage
+        # see: https://en.wikipedia.org/wiki/Mutual_information
         leakage = H_C - H_CF
 
         # debug output
-        print("\tH(C) = {}".format(H_CF))
-        print("\tH(C|f) = {}".format(H_CF))
-        print("\tI(C;f) = {}".format(leakage))
+        print("=> H(C) = {}             ".format(H_C))
+        print("=> H(C|f) = {}".format(H_CF))
+        print("=> I(C;f) = {}".format(leakage))
         return leakage
 
