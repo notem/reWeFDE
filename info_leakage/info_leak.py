@@ -6,6 +6,7 @@ import numpy as np
 import csv
 import os
 import sys
+import pickle
 from fingerprint_modeler import WebsiteFingerprintModeler
 
 
@@ -18,11 +19,12 @@ def info_leakage(X, Y):
     for i in range(X.shape[1]):
         print("Processing leakage for feature #{}...".format(i))
         try:
-            leakage.append(fingerprinter.individual_leakage(i))
+            leakage.append(fingerprinter.individual_leakage_multi(i))
         except KeyboardInterrupt:
             sys.exit(-1)
         except Exception as exc:
             print("=> Failed to estimate leakage: {}".format(exc))
+            leakage.append(None)
     return leakage
 
 
@@ -69,5 +71,5 @@ if __name__ == "__main__":
 
     X, Y = load_data(args.traces)
     leakage = info_leakage(X, Y)
-
+    pickle.dump(leakage, open("leakage.pkl", "wb"))
     print(leakage)

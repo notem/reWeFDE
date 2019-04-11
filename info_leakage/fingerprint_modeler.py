@@ -2,6 +2,7 @@
 import math
 import numpy as np
 from awkde.awkde import GaussianKDE
+from skmonaco import mcimport, mcquad, mcmiser
 
 
 class WebsiteData(object):
@@ -13,7 +14,7 @@ class WebsiteData(object):
         self.X = X
         self.Y = Y
         self.features = range(X.shape[1])
-        self.sites = range(max(np.unique(self.Y)))
+        self.sites = range(len(np.unique(self.Y)))
 
     def get_site(self, label):
         """
@@ -85,13 +86,15 @@ class WebsiteFingerprintModeler(object):
 
         return samples
 
-    def individual_leakage(self, feature, sample_size=1000):
+    def individual_leakage(self, feature, sample_size=5000):
         """
         Evaluate the information leakage.
+        Computes joint KDE of feature and sites using the awkde library.
+        Performance linear monte-carlo integration to estimate the
+          conditional entropy of the sites given the feature.
         """
         # create pdf for sampling and probability calculations
         jkde = self._model_joint(feature)
-        mkde = self._model_individual(feature)
 
         # Shannon Entropy func: -p(x)*log2(p(x))
         h = lambda x: -x * math.log2(x)
@@ -102,8 +105,9 @@ class WebsiteFingerprintModeler(object):
         H_C = sum(sequence)
 
         # performing sampling for monte-carlo evaluation of H(C|f)
-        #samples = self._sample(feature, website_priors, sample_size)    # author's method
-        samples = mkde.sample(sample_size)                              # from generic distribution
+        samples = self._sample(feature, website_priors, sample_size)    # author's method
+        #samples = mkde.sample(sample_size)                              # from generic distribution
+        #samples = [l[1] for l in jkde.sample(sample_size)]
 
         # compute conditional entropy for each sample
         entropies = []
@@ -115,15 +119,18 @@ class WebsiteFingerprintModeler(object):
             joint_probs = [prob for sublist in joint_probs for prob in sublist]
 
             # p(x) -- compute marginal probability
-            marginal_prob = mkde.predict([sample])
+            marginal_prob = sum([jkde.predict([site, sample]) for site in self.data.sites])
 
             # p(y|x) = p(x,y)/p(x) -- compute conditional probability
             # see: https://en.wikipedia.org/wiki/Conditional_probability_distribution
             conditional_probs = [prob/marginal_prob for prob in joint_probs]
 
+            # if conditional pdf does not sum to 1.0, something is wrong!
+            assert(sum(conditional_probs) >= 0.99)
+
             # compute entropy
-            # see: https://en.wikipedia.org/wiki/C0.41581063onditional_entropy
-            entropy = sum([h(prob) for prob in conditional_probs])
+            # see: https://en.wikipedia.org/wiki/Conditional_entropy
+            entropy = sum([h(cprob) for cprob in conditional_probs])
             entropies.append(entropy)
 
         # H(C|f) -- compute conditional entropy via monte-carlo
@@ -140,3 +147,80 @@ class WebsiteFingerprintModeler(object):
         print("=> I(C;f) = {}".format(leakage))
         return leakage
 
+    def individual_leakage_multi(self, feature, sample_size=1000, proc_num=8):
+        """
+        Evaluate the information leakage.
+        Improve computation performance by utilizing multiple processes during monte-carlo integration.
+        Monte-carlo integration is performed using the skmonaco library.
+        """
+        # create pdf for sampling and probability calculations
+        jkde = self._model_joint(feature)
+
+        # Shannon Entropy func: -p(x)*log2(p(x))
+        h = lambda x: -x * math.log2(x)
+
+        # H(C) -- compute website entropy
+        website_priors = [1/len(self.data.sites) for _ in self.data.sites]
+        sequence = [h(prior) for prior in website_priors if prior > 0]
+        H_C = sum(sequence)
+
+        def f(x):
+            """
+            Function to integrate by Monte-Carlo using skmonaco library.
+            """
+            if np.ndim(x) == 1:
+                samples = [x]
+            else:
+                samples = []
+                for sample_no in range(len(x)):
+                    samples.append(x[sample_no, :])
+
+            entropies = []
+            for sample in samples:
+                # p(x,y) -- compute joint probability for all sites
+                joint_probs = [jkde.predict([site, sample]).tolist() for site in self.data.sites]
+                joint_probs = [prob for sublist in joint_probs for prob in sublist]
+
+                # p(x) -- compute marginal probability
+                marginal_prob = sum([jkde.predict([site, sample]) for site in self.data.sites])
+
+                # p(y|x) = p(x,y)/p(x) -- compute conditional probability
+                # see: https://en.wikipedia.org/wiki/Conditional_probability_distribution
+                conditional_probs = [prob/marginal_prob for prob in joint_probs]
+
+                # if conditional pdf does not sum to 1.0, something is wrong!
+                assert(sum(conditional_probs) >= 0.99)
+
+                # compute entropy
+                # see: https://en.wikipedia.org/wiki/Conditional_entropy
+                entropy = sum([h(cprob) for cprob in conditional_probs])
+                entropies.append(entropy)
+
+            if len(entropies) == 1:
+                return entropies[0]
+            return entropies
+
+        def d(size):
+            """
+            Distribution to sample from using skmonaco library.
+            """
+            if isinstance(size, tuple):
+                samples = jkde.sample(size[0])
+                return samples[:, 1]
+            else:
+                samples = jkde.sample(size)
+                return samples[:, 1]
+
+        # H(C|f) -- compute conditional entropy via monte-carlo
+        # see: https://en.wikipedia.org/wiki/Monte_Carlo_integration#Importance_sampling_algorithm
+        H_CF = mcimport(f, sample_size, d, nprocs=proc_num, batch_size=(sample_size//proc_num))[0]
+
+        # I(C;f) = H(C) - H(C|f) -- compute information leakage
+        # see: https://en.wikipedia.org/wiki/Mutual_information
+        leakage = H_C - H_CF
+
+        # debug output
+        print("=> H(C) = {}             ".format(H_C))
+        print("=> H(C|f) = {}".format(H_CF))
+        print("=> I(C;f) = {}".format(leakage))
+        return leakage
