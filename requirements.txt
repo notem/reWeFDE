@@ -1,6 +1,4 @@
 statsmodels
 numpy
 scipy
-scikit-monaco
-pypmc
-awkde
+-e git://github.com/mennthor/awkde.git#egg=awkde

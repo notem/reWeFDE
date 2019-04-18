@@ -19,7 +19,7 @@ def info_leakage(X, Y):
     for i in range(X.shape[1]):
         print("Processing leakage for feature #{}...".format(i))
         try:
-            leakage.append(fingerprinter.individual_leakage_multi(i))
+            leakage.append(fingerprinter.individual_leakage(i))
         except KeyboardInterrupt:
             sys.exit(-1)
         except Exception as exc:

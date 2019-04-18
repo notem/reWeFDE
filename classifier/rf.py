@@ -101,7 +101,6 @@ def classify(feature_directory, tr_split, out):
     print("cross_val_score = ", scores.mean())
     print("OOB score = ", model.oob_score_)
 
-
     if out:
         res = dict()
         res['cross_val_score'] = scores.mean()
