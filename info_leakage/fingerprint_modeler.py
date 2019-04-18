@@ -3,32 +3,8 @@ import math
 import numpy as np
 from awkde.awkde import GaussianKDE
 
-
-class WebsiteData(object):
-    """
-    Object-wrapper to conveniently manage dataset
-    """
-
-    def __init__(self, X, Y):
-        self._X = X
-        self._Y = Y
-        self.features = range(X.shape[1])
-        self.sites = range(len(np.unique(self._Y)))
-
-    def get_labels(self):
-        return self._Y
-
-    def get_site(self, label, feature=None):
-        """
-        Get X for given site
-        """
-        f = [True if y == label else False for y in self._Y]
-        if feature is not None:
-            return self._X[f, feature]
-        return self._X[f, :]
-
-    def get_feature(self, feature):
-        return self._X[:, feature]
+from data_utils import WebsiteData
+from data_utils import logger
 
 
 class WebsiteFingerprintModeler(object):
@@ -153,7 +129,6 @@ class WebsiteFingerprintModeler(object):
         leakage = H_C - H_CF
 
         # debug output
-        print("=> H(C) = {}             ".format(H_C))
-        print("=> H(C|f) = {}".format(H_CF))
-        print("=> I(C;f) = {}".format(leakage))
+        logger.debug("{l} = {c} - {cf}"
+                     .format(l=leakage, c=H_C, cf=H_CF))
         return leakage
