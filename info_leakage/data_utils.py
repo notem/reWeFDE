@@ -4,6 +4,8 @@ import sys
 
 import numpy as np
 import logging as log
+from awkde.awkde import GaussianKDE
+from collections.abc import Iterable
 
 
 def ready_logger():
@@ -33,7 +35,7 @@ def ready_logger():
     logging_handler_err = log.StreamHandler(sys.stderr)
     logging_handler_err.setLevel(log.WARNING)
 
-    format = log.Formatter('[%(asctime)s][%(levelname)s][%(funcName)s] %(message)s')
+    format = log.Formatter('[%(asctime)s][%(processName)-10s][%(levelname)s] %(message)s')
     logging_handler_err.setFormatter(format)
     logging_handler_out.setFormatter(format)
 
@@ -79,6 +81,42 @@ class WebsiteData(object):
         Return all X for a specific feature
         """
         return np.copy(self._X[:, feature])
+
+    def model_distribution(self, features, site=None):
+        """
+        Produce AKDE for a single feature or single feature for a particular site.
+        :param features: index of feature(s) of which to model a multi/uni-variate AKDE
+        :param site: (optional) model features only for the given website
+        """
+        if not isinstance(features, Iterable):
+            features = [features]
+
+        # build X for features
+        X = None
+        for feature in features:
+            if site:    # pdf(f|c)
+                X_f = self.get_site(site, feature)
+            else:       # pdf(f)
+                X_f = self.get_feature(feature)
+            if X:
+                np.hstack(X, X_f)
+            else:
+                X = np.reshape(X_f, (X_f.shape[0], 1))
+
+        # fit KDE on X
+        kde = GaussianKDE()
+        try:
+            kde.fit(X)
+
+        # AWKDE cannot model data whose distribution is a single value
+        # This results in a linear algebra error during fit()
+        # To remedy this, add negligible value of features in the first instance
+        except np.linalg.LinAlgError:
+            for d in range(X.shape[1]):
+                X[0][d] += 0.00000001
+            kde.fit(X)
+
+        return kde
 
 
 def load_data(directory, extension='.features', delimiter=' '):
