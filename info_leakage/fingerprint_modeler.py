@@ -1,7 +1,9 @@
 
 import math
 from data_utils import logger
-from collections.abc import Iterable
+from collections import Iterable
+from matlab.wrapper import MatlabWorkspace, AKDE
+import numpy as np
 
 
 class WebsiteFingerprintModeler(object):
@@ -16,6 +18,36 @@ class WebsiteFingerprintModeler(object):
         self.data = data
         self.sample_size = sample_size
 
+    def _make_kde(self, features, site=None, workspace=None):
+        """
+        Produce AKDE for a single feature or single feature for a particular site.
+        :param features: index of feature(s) of which to model a multi/uni-variate AKDE
+        :param site: (optional) model features only for the given website
+        """
+        if not isinstance(features, Iterable):
+            features = [features]
+
+        # build X for features
+        X = None
+        for feature in features:
+
+            # get feature vector
+            if site is not None:    # pdf(f|c)
+                X_f = self.data.get_site(site, feature)
+            else:       # pdf(f)
+                X_f = self.data.get_feature(feature)
+            X_f = np.reshape(X_f, (X_f.shape[0], 1))
+
+            # extend X w/ feature vector if it has been initialized
+            # otherwise, initalize X using the current feature vector
+            if X is None:
+                X = X_f
+            else:
+                np.hstack((X, X_f))
+
+        # fit KDE on X
+        return AKDE(workspace).fit(X)
+
     def _sample(self, mkdes, web_priors, sample_size):
         """
         Select samples for monte-carlo evaluation.
@@ -29,46 +61,14 @@ class WebsiteFingerprintModeler(object):
         for site, mkde in zip(self.data.sites, mkdes):
 
             # n = k * pr(c[i]) -- number of samples per site
-            num = int(sample_size*web_priors[site])
+            num = int(sample_size * web_priors[site])
 
-            # sample from pdf(f|c[i])
-            x = mkde.sample(n_samples=num)
-            samples.extend(x)
+            if num > 0:
+                # sample from pdf(f|c[i])
+                x = mkde.sample(num)
+                samples.extend(x)
 
         return samples
-
-    def _estimate_entropy(self, sample, mkdes, website_priors):
-        """
-
-        :return:
-        """
-        # Shannon Entropy func: -p(x)*log2(p(x))
-        h = lambda x: -x * math.log2(x)
-
-        # get probabilities of sample from each website density distribution
-        marginal_probs = [mkde.predict([sample]) for mkde in mkdes]
-
-        # take the log2 of probs (copy original WeFDE code)
-        marginal_probs = [math.log2(prob) if prob > 0 else -300.0 for prob in marginal_probs]
-
-        # don't know why this is done
-        marginal_probs = [prob - max(marginal_probs) for prob in marginal_probs]
-
-        # reverse log2
-        marginal_probs = [2**prob for prob in marginal_probs]
-
-        # weight by website priors
-        prob_temp = [prob*prior for prob, prior in zip(marginal_probs, website_priors)]
-
-        # normalize probabilities?
-        prob_indiv = [prob / sum(prob_temp) for prob in prob_temp]
-
-        # pointless check, previous line guarantees this to be true
-        assert(sum(prob_indiv) > 0.99)
-
-        # sum the entropy of site probabilities
-        entropy = sum([h(prob) for prob in prob_indiv if prob > 0])
-        return entropy
 
     def information_leakage(self, features):
         """
@@ -85,35 +85,36 @@ class WebsiteFingerprintModeler(object):
 
             logger.debug("Measuring leakage for {}".format(features))
 
+            # create a workspace
+            workspace = MatlabWorkspace()
+
             # create pdf for sampling and probability calculations
-            mkdes = [self.data.model_distribution(features=features, site=site) for site in self.data.sites]
+            mkdes = [self._make_kde(features, site, workspace) for site in self.data.sites]
 
             # Shannon Entropy func: -p(x)*log2(p(x))
-            h = lambda x: -x * math.log2(x)
+            h = lambda x: -x * math.log(x, 2)
 
             # H(C) -- compute website entropy
-            website_priors = [1/len(self.data.sites) for _ in self.data.sites]
-            sequence = [h(prior) for prior in website_priors if prior > 0]
-            H_C = sum(sequence)
+            website_priors = [1/float(len(self.data.sites)) for _ in self.data.sites]
+            H_C = sum([h(prior) for prior in website_priors if prior > 0])
 
             # performing sampling for monte-carlo evaluation of H(C|f)
             samples = self._sample(mkdes, website_priors, self.sample_size)
 
-            # ----------------------------------------------------------------
-            # BEGIN SECTION: Following algorithm copied from original WeFDE code
-            # ----------------------------------------------------------------
-            # compute the log of the probabilities for each sample
-            prob_set = []
-            for sample in samples:
+            # get probabilities of samples from each website density distribution
+            prob_set = [mkde.predict(samples) for mkde in mkdes]
 
-                # get probabilities of sample from each website density distribution
-                marginal_probs = [mkde.predict([sample]) for mkde in mkdes]
+            # teardown matlab session
+            del workspace
 
-                # take the log2 of probs (copy original WeFDE code)
-                marginal_probs = [math.log2(prob) if prob > 0 else -300.0 for prob in marginal_probs]
-                prob_set.append(marginal_probs)
+            # transpose so that first index represents each sample
+            prob_set = np.array(prob_set).transpose((1, 0))
 
-            # don't know what this does
+            # take the log2 of probs?
+            prob_set = [[math.log(prob, 2) if prob > 0 else -300.0 for prob in sample_probs]
+                        for sample_probs in prob_set]
+
+            # don't know what this does?
             prob_set = [[prob - max(prob_inst) for prob in prob_inst]
                         for prob_inst in prob_set]
 
@@ -129,33 +130,32 @@ class WebsiteFingerprintModeler(object):
             prob_indiv = [[prob / sum(prob_inst) for prob in prob_inst]
                           for prob_inst in prob_temp]
 
-            # pointless check, previous line guarantees this to be true
+            # check for calculation error?
             for prob_inst in prob_indiv:
                 assert(sum(prob_inst) > 0.99)
-
-            # ----------------------------------------------------------------
-            # END SECTION
-            # ----------------------------------------------------------------
 
             # compute entropy for instances
             entropies = [sum([h(prob) for prob in prob_inst if prob > 0])
                          for prob_inst in prob_indiv]
 
             # H(C|f) -- compute conditional entropy via monte-carlo from sample probabilities
-            # see: https://en.wikipedia.org/wiki/Monte_Carlo_integration#Importance_sampling_algorithm
             H_CF = sum(entropies)/len(entropies)
 
             # I(C;f) = H(C) - H(C|f) -- compute information leakage
-            # see: https://en.wikipedia.org/wiki/Mutual_information
             leakage = H_C - H_CF
 
             # debug output
             logger.debug("{l} = {c} - {cf}"
                          .format(l=leakage, c=H_C, cf=H_CF))
+
             return leakage
 
-        except Exception:
+        except not KeyboardInterrupt:
             # in cases where there is an unknown error, save leakage as N/A
             # ignore these features when computing combined leakage
             logger.exception("Exception when estimating leakage for {}.".format(features))
             return None
+
+    def __call__(self, features):
+        return self.information_leakage(features)
+

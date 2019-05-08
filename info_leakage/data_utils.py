@@ -4,8 +4,7 @@ import sys
 
 import numpy as np
 import logging as log
-from awkde.awkde import GaussianKDE
-from collections.abc import Iterable
+import pickle
 
 
 def ready_logger():
@@ -61,6 +60,9 @@ class WebsiteData(object):
         self.features = range(X.shape[1])
         self.sites = range(len(np.unique(self._Y)))
 
+    def __len__(self):
+        return self._X.shape[0]
+
     def get_labels(self):
         """
         Return Y
@@ -82,64 +84,60 @@ class WebsiteData(object):
         """
         return np.copy(self._X[:, feature])
 
-    def model_distribution(self, features, site=None):
-        """
-        Produce AKDE for a single feature or single feature for a particular site.
-        :param features: index of feature(s) of which to model a multi/uni-variate AKDE
-        :param site: (optional) model features only for the given website
-        """
-        if not isinstance(features, Iterable):
-            features = [features]
 
-        # build X for features
-        X = None
-        for feature in features:
-            if site:    # pdf(f|c)
-                X_f = self.get_site(site, feature)
-            else:       # pdf(f)
-                X_f = self.get_feature(feature)
-            if X:
-                np.hstack(X, X_f)
-            else:
-                X = np.reshape(X_f, (X_f.shape[0], 1))
-
-        # fit KDE on X
-        kde = GaussianKDE()
-        try:
-            kde.fit(X)
-
-        # AWKDE cannot model data whose distribution is a single value
-        # This results in a linear algebra error during fit()
-        # To remedy this, add negligible value of features in the first instance
-        except np.linalg.LinAlgError:
-            for d in range(X.shape[1]):
-                X[0][d] += 0.00000001
-            kde.fit(X)
-
-        return kde
-
-
-def load_data(directory, extension='.features', delimiter=' '):
+def load_data(directory, extension='.csv', delimiter=' '):
     """
-    Load feature files from feature directory
+    Load feature files from feature directory.
     :return X - numpy array of data instances w/ shape (n,f)
     :return Y - numpy array of data labels w/ shape (n,1)
     """
-    X = []  # feature instances
-    Y = []  # site labels
-    for root, dirs, files in os.walk(directory):
+    # load pickle file if it exist
+    feat_pkl = os.path.join(directory, "features.pkl")
+    if os.path.exists(feat_pkl):
+        with open(feat_pkl, "rb") as fi:
+            X, Y = pickle.load(fi)
+            return X, Y
+    else:
+        X = []  # feature instances
+        Y = []  # site labels
+        for root, dirs, files in os.walk(directory):
 
-        # filter for feature files
-        files = [fi for fi in files if fi.endswith(extension)]
+            # filter for feature files
+            files = [fi for fi in files if fi.endswith(extension)]
 
-        # read each feature file as CSV
-        for file in files:
-            cls, ins = file.split("-")
-            with open(os.path.join(root, file), "r") as csvFile:
-                features = [float(f) for f in list(csv.reader(csvFile, delimiter=delimiter))[0] if f]
-                X.append(features)
-                Y.append(int(cls))
+            def isfloat(element):
+                try:
+                    float(element)
+                    return True
+                except ValueError:
+                    return False
+
+            # read each feature file as CSV
+            for file in files:
+                #cls, ins = file.split("-")
+                cls, ls = file.split("_")
+                with open(os.path.join(root, file), "r") as csvFile:
+                    features = list(csv.reader(csvFile, delimiter=delimiter))
+                    features = [[float(f) if isfloat(f) else 0 for f in instance if f] for instance in features]
+
+                    if len(features) >= 500:
+                        features = features[:500]
+
+                        X.extend(features)
+                        Y.extend([int(cls)-1 for _ in range(len(features))])
+
+        labels = list(set(Y))
+        labels.sort()
+        d = dict()
+        for i in range(len(labels)):
+            d[labels[i]] = i
+        Y = list(map(lambda x: d[x], Y))
+
+        # save dataset to pickle file for quicker future loading
+        X, Y = np.array(X), np.array(Y)
+        with open(feat_pkl, "wb") as fi:
+            pickle.dump((X, Y), fi)
 
     # return X and Y as numpy arrays
-    return np.array(X), np.array(Y)
+    return X,Y
 

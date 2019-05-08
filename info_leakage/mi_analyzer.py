@@ -1,107 +1,220 @@
-import math
 import numpy as np
+from itertools import repeat, combinations_with_replacement
 from data_utils import logger
+from sklearn.cluster import DBSCAN
+from matlab.wrapper import MatlabWorkspace
 
 
 class MutualInformationAnalyzer(object):
 
-    def __init__(self, data, nmi_threshold=0.9, topn=100, n_samples=1000):
+    def __init__(self, data, leakage, nmi_threshold=0.9, topn=100, pool=None):
         self.data = data
         self.nmi_threshold = nmi_threshold
         self.topn = topn
-        self.n_samples = n_samples
+        self.leakage = leakage
+        self.pool = pool
+        self._nmi_cache = []
+        self._mi_cache = []
 
-    def _calculate_nmi(self, c, r):
+    def _estimate_nmi(self, feature_pair, workspace=None):
         """
-        :param c:
-        :param r:
-        :return:
+        Estimate pairwise normalized mutual information value.
+        :param c: Feature number #1
+        :param r: Feature number #2
+        :return: normalized mutual information
         """
-        # model the joint and marginal PDFs of features
-        jkde = self.data.model_distribution([c, r])
-        mkde_c = self.data.model_distribution(c)
-        mkde_r = self.data.model_distribution(r)
+        c, r = feature_pair
 
-        # determine the domains of each feature
-        domain_c = (np.amin(self.data.get_feature(c)), np.amax(self.data.get_feature(c)))
-        domain_r = (np.amin(self.data.get_feature(r)), np.amax(self.data.get_feature(r)))
+        # setup data array
+        X1 = self.data.get_feature(c)
+        X1 = np.reshape(X1, (X1.shape[0], 1))
+        X2 = self.data.get_feature(r)
+        X2 = np.reshape(X2, (X2.shape[0], 1))
+        X = np.hstack((X1, X2))
 
-        # entropy function
-        h = lambda x: -x * math.log2(x) if x > 0 else 0
+        # create a matlab workspace if necessary
+        del_workspace = False
+        if workspace is None:
+            del_workspace = True
+            workspace = MatlabWorkspace()
 
-        # perform uniform monte-carlo integration estimation:
-        # TODO: replace with a more efficient estimation method
-        # - perform uniform sampling over the domains of each feature
-        samples = zip(np.random.uniform(*domain_c, self.n_samples).tolist(),
-                      np.random.uniform(*domain_r, self.n_samples).tolist())
+        # measure MI for both single features
+        # the max of these two values are used to normalize the joint MI
+        # these values are saved in a separate internal cache
+        mi_1 = None
+        mi_2 = None
+        for pair, mi in self._mi_cache:
+            if pair[0] == c and pair[1] == c:
+                mi_1 = mi
+            elif pair[0] == r and pair[1] == r:
+                mi_2 = mi
+        if mi_1 is None:
+            mi_1 = workspace.pairwise_mi(np.hstack((X1, X1)))
+            self._mi_cache.append(((c, c), mi_1))
+        if mi_2 is None:
+            mi_2 = workspace.pairwise_mi(np.hstack((X2, X2)))
+            self._mi_cache.append(((r, r), mi_2))
 
-        # - calculate entropy of each sample
-        H_c = [h(mkde_c.predict([sample])) for sample in samples]
-        H_r = [h(mkde_r.predict([sample])) for sample in samples]
-        H_cr = [h(jkde.predict([sample])) for sample in samples]
+        # calculate entropies and mutual information of feature c and r
+        mi = workspace.pairwise_mi(X)
 
-        # - sum and divide
-        H_c = sum(H_c) / len(H_c)
-        H_r = sum(H_r) / len(H_r)
-        H_cr = sum(H_cr) / len(H_cr)
+        # delete workspace if necessary
+        if del_workspace:
+            del workspace
 
-        # I(c;r) = H(c) + H(r) - H(c,r)
-        I_cr = H_c + H_r - H_cr
+        # calculate normalized mutual information
+        nmi = mi/max([mi_1, mi_2])
 
-        # NMI = I(c;r) / max(H(c),H(r))
-        nmi = I_cr / max(H_c, H_r)
-
-        # return normalized pair-wise mutual information
         return nmi
 
-    def prune(self, leakage_indiv):
+    def _check_redundancy(self, feature_pair):
         """
+        Perform pairwise mutual information analysis to identify feature redundancy.
+        :param feature_pair: 2-tuple containing features to compare
+        :return: 3-tuple (redundancy, feature_pair, nmi_value)
+        """
+        feature1, feature2 = feature_pair
 
-        :param leakage_indiv:
-        :return:
+        # calculate the normalized mutual information
+        nmi = self._estimate_nmi((feature1, feature2))
+        logger.debug("| nmi({},{}) = {}".format(feature1, feature2, nmi))
+
+        # prune if nmi is above threshold
+        if nmi > self.nmi_threshold:
+            logger.debug("Feature #{} is redundant w/ #{}".format(feature1, feature2))
+            return True, feature_pair, nmi
+        # feature is not redundant
+        return False, feature_pair, nmi
+
+    def prune(self):
         """
+        Reduce the feature-set to a list of top N features which are non-redudant.
+        Redundancy is identified by estimating the pair-wise mutual information of features.
+        :return: list of features, length topn
+        """
+        # results of NMI calculations are saved in list internal to the analyzer
+        # reduces the amount of computation required in any subsequent cluster calls
+        self._nmi_cache, self._mi_cache = [], []
+
         # list of best features
-        pruned = []
+        cleaned_features = []
+        pruned_features = []
 
         # sort the list of features by their individual leakage
         # we will process these features in the order of their importance
-        tuples = zip(range(len(leakage_indiv)), leakage_indiv)
+        logger.debug("Sorting features by individual leakage.")
+        tuples = zip(self.data.features, self.leakage)
         tuples = sorted(tuples, key=lambda x: (-x[1], x[0]))
+        logger.debug("Top 50:\t {}".format(tuples[:50]))
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
-        while tuples and len(pruned) < self.topn:
+        while tuples and len(cleaned_features) < self.topn:
 
             # the next most important feature
-            current_feature = tuples.pop()[0]
+            current_feature = tuples.pop(0)[0]
             logger.debug("MI analysis on feature #{}".format(current_feature))
 
             # for all top features, measure pair-wise mutual information to check for redundancy
+            feature_pairs = zip(repeat(current_feature), cleaned_features)
+            if self.pool is None or len(cleaned_features) < 2:
+                results = map(self._check_redundancy, feature_pairs)
+            else:   # parallel, unordered
+                results = self.pool.uimap(self._check_redundancy, feature_pairs)
+
+            # break upon first occurrence of redundancy
             is_redundant = False
-            for count, tup in enumerate(pruned):
-                feature = tup[0]
+            for res in results:
 
-                # calculate the normalized mutual information
-                nmi = self._calculate_nmi(current_feature, feature)
+                # print progress updates
+                if len(cleaned_features) % (self.topn*0.05) == 0:
+                    logger.info("Progress: {}/{}".format(len(cleaned_features), self.topn))
 
-                # prune if nmi is above threshold
-                if nmi > self.nmi_threshold:
-                    is_redundant = True
-                    logger.debug("Feature #{} is redundant w/ #{}".format(current_feature, feature))
+                # unzip results
+                is_redundant, feature_pair, nmi = res
+
+                # save feature pair with nmi in internal cache
+                self._nmi_cache.append((feature_pair, nmi))
+
+                # break loop
+                if is_redundant:
+                    # if the analyzer is using a process pool
+                    # terminate processes and restart the pool
+                    if self.pool is not None:
+                        self.pool.terminate()
+                        self.pool.join()
+                        self.pool.restart()
                     break
 
-            # if the current feature does not appear to be redundant with any other top features,
-            # add current feature to top features list
+            # if the current feature does not appear to be redundant with any
+            # other top features, add current feature to top features list
             if not is_redundant:
-                pruned.append(current_feature)
+                cleaned_features.append(current_feature)
+            else:
+                pruned_features.append(current_feature)
 
-        return pruned
+        logger.debug("Pruned features: {}".format(pruned_features))
+        logger.debug("Clean features: {}".format(cleaned_features))
+        return cleaned_features
 
-    def cluster(self, features):
+    def cluster(self, features, eps=0.4):
+        """
+        Use DBSCAN algorithm to cluster topN features based upon their pairwise mutual information.
+        :param features: topN features
+        :param eps: DBSCAN eps value
+        :return: nested lists where each list contains the a cluster's features
         """
 
-        :param features:
-        :return:
-        """
-        # TODO: cluster features using DBSCAN
-        return [[feature] for feature in features]
+        # compute pairwise MI for all topN features
+        X = np.ones(shape=(len(features), len(features)), dtype=float)
+        pairs = list(combinations_with_replacement(features, 2))
+
+        if self._nmi_cache:
+            cache = [(pair, nmi) for pair, nmi in self._nmi_cache if pair[0] in features and pair[1] in features]
+            for cached_pair, nmi in cache:
+                # remove cached_pair from pairs
+                pairs = filter(lambda pair: (pair[0] == cached_pair[0] and pair[1] == cached_pair[1]) or
+                                            (pair[0] == cached_pair[1] and pair[1] == cached_pair[0]), pairs)
+                # add cached nmi to matrix
+                i, j = features.index(cached_pair[0]), features.index(cached_pair[1])
+                X[i][j] = nmi
+                X[j][i] = nmi
+
+        # serial operation
+        if self.pool is None:
+            results = map(self._estimate_nmi, pairs)
+        else:
+            results = self.pool.imap(self._estimate_nmi, pairs)
+            self.pool.close()
+
+        # fill matrix with pair nmi values
+        count = 0
+        for pair, nmi in zip(pairs, results):
+
+            # print progress updates
+            count += 1
+            if len(pairs) % (len(pairs)*0.05) == 0:
+                logger.info("Progress: {}/{}".format(count, len(pairs)))
+
+            fidx1, fidx2 = pair
+            i, j = features.index(fidx1), features.index(fidx2)
+            X[i][j] = nmi
+            X[j][i] = nmi
+
+        if self.pool is not None:
+            self.pool.join()
+            self.pool.restart()
+
+        # use DBSCAN to cluster our data
+        labels = DBSCAN(eps=eps).fit_predict(X)
+        logger.info("Found {} clusters.".format(set(labels)))
+
+        # organize the topN features into sub-lists where
+        # each sub-list contains all features in a cluster
+        clusters = []
+        for label in range(min(labels), max(labels)):
+            cluster = [features[i] for i, la in enumerate(labels) if la == label]
+            clusters.append(cluster)
+
+        logger.debug("Clusters: {}".format(labels))
+        return clusters

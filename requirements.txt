@@ -1,4 +1,5 @@
 statsmodels
 numpy
 scipy
--e git://github.com/mennthor/awkde.git#egg=awkde
+matlab_wrapper
+pathos
