@@ -126,10 +126,6 @@ class MutualInformationAnalyzer(object):
             is_redundant = False
             for res in results:
 
-                # print progress updates
-                if len(cleaned_features) % (self.topn*0.05) == 0:
-                    logger.info("Progress: {}/{}".format(len(cleaned_features), self.topn))
-
                 # unzip results
                 is_redundant, feature_pair, nmi = res
 
@@ -150,6 +146,7 @@ class MutualInformationAnalyzer(object):
             # other top features, add current feature to top features list
             if not is_redundant:
                 cleaned_features.append(current_feature)
+                logger.info("Progress: {}/{}".format(len(cleaned_features), self.topn))
             else:
                 pruned_features.append(current_feature)
 
@@ -166,11 +163,13 @@ class MutualInformationAnalyzer(object):
         """
 
         # compute pairwise MI for all topN features
-        X = np.ones(shape=(len(features), len(features)), dtype=float)
-        pairs = list(combinations_with_replacement(features, 2))
+        X = np.ones(shape=(len(features), len(features)), dtype=float)  # distance matrix
+        pairs = list(combinations_with_replacement(features, 2))        # all possible combinations
 
         if self._nmi_cache:
+            # ignore unselected features in cache
             cache = [(pair, nmi) for pair, nmi in self._nmi_cache if pair[0] in features and pair[1] in features]
+            # add each cached nmi to the distance matrix
             for cached_pair, nmi in cache:
                 # remove cached_pair from pairs
                 pairs = filter(lambda pair: (pair[0] == cached_pair[0] and pair[1] == cached_pair[1]) or
@@ -180,7 +179,7 @@ class MutualInformationAnalyzer(object):
                 X[i][j] = nmi
                 X[j][i] = nmi
 
-        # serial operation
+        # map pairs to nmi
         if self.pool is None:
             results = map(self._estimate_nmi, pairs)
         else:
@@ -201,12 +200,13 @@ class MutualInformationAnalyzer(object):
             X[i][j] = nmi
             X[j][i] = nmi
 
+        # restart pool if multiprocessing
         if self.pool is not None:
             self.pool.join()
             self.pool.restart()
 
         # use DBSCAN to cluster our data
-        labels = DBSCAN(eps=eps).fit_predict(X)
+        labels = DBSCAN(eps=eps, metric='precomputed').fit_predict(X)
         logger.info("Found {} clusters.".format(set(labels)))
 
         # organize the topN features into sub-lists where

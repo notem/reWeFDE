@@ -42,43 +42,6 @@ def individual_measure(fingerprinter, pool=None):
     return leakage_indiv
 
 
-def combined_measure(analyzer, fingerprinter, pool=None):
-    """
-    :param analyzer:
-    :param fingerprinter:
-    :param pool:
-    :return:
-    """
-    # process into list of non-redundant features
-    logger.info("Begin feature pruning.")
-    pruned = analyzer.prune()
-
-    # cluster non-redundant features
-    logger.info("Begin feature clustering.")
-    clusters = analyzer.cluster(pruned)
-
-    # if a pool has been provided, perform computation in parallel
-    # otherwise do serial computation
-    if pool is None:
-        proc_results = map(fingerprinter, clusters)
-    else:
-        proc_results = pool.imap(fingerprinter, clusters)
-        pool.close()
-
-    logger.info("Begin cluster leakage measurements.")
-    # measure information for each cluster
-    # log current progress at twenty intervals
-    leakage_joint = []
-    for leakage in proc_results:
-        if len(leakage_joint) % int(len(clusters)*0.05) == 0:
-            logger.info("Progress: {}/{}".format(len(leakage_joint), len(clusters)))
-        leakage_joint.append(leakage)
-    if pool is not None:
-        pool.join()
-        pool.restart()
-    return leakage_joint
-
-
 def parse_args():
     """
     Parse command line arguments
@@ -173,7 +136,7 @@ def main(args):
             if os.path.dirname(args.individual):
                 os.makedirs(os.path.dirname(args.individual))
             with open(args.individual, "wb") as fi:
-                pickle.dump(leakage_indiv, fi)
+                pickle.dump(leakage_indiv, fi, 0)
 
     # perform combined information leakage measurements
     leakage_joint = None
@@ -194,15 +157,44 @@ def main(args):
                                                  topn=args.topn,
                                                  pool=pool)
 
-            # perform combined information leakage analysis
-            leakage_joint = combined_measure(analyzer, fingerprinter, pool)
+            # process into list of non-redundant features
+            logger.info("Begin feature pruning.")
+            pruned = analyzer.prune()
+            with open('top{}.pkl'.format(args.topn), 'w') as fi:
+                pickle.dump(pruned, fi, 0)
+
+            # cluster non-redundant features
+            logger.info("Begin feature clustering.")
+            clusters = analyzer.cluster(pruned)
+            with open('clusters.pkl', 'w') as fi:
+                pickle.dump(clusters, fi, 0)
+
+            logger.info("Begin cluster leakage measurements.")
+            # if a pool has been provided, perform computation in parallel
+            # otherwise do serial computation
+            if pool is None:
+                proc_results = map(fingerprinter, clusters)
+            else:
+                proc_results = pool.imap(fingerprinter, clusters)
+                pool.close()
+
+            # measure information for each cluster
+            # log current progress at twenty intervals
+            leakage_joint = []
+            for leakage in proc_results:
+                if len(leakage_joint) % int(len(clusters)*0.05) == 0:
+                    logger.info("Progress: {}/{}".format(len(leakage_joint), len(clusters)))
+                leakage_joint.append(leakage)
+            if pool is not None:
+                pool.join()
+                pool.restart()
 
             # save individual leakage to file
             logger.info("Saving joint leakage to {}.".format(args.combined))
             if os.path.dirname(args.combined):
                 os.makedirs(os.path.dirname(args.combined))
             with open(args.combined, "wb") as fi:
-                pickle.dump(leakage_joint, fi)
+                pickle.dump(leakage_joint, fi, 0)
 
     # summarize results
     # TODO
