@@ -150,6 +150,7 @@ class MutualInformationAnalyzer(object):
             else:
                 pruned_features.append(current_feature)
 
+        logger.info('Removed {} redundant features.'.format(len(pruned_features)))
         logger.debug("Pruned features: {}".format(pruned_features))
         logger.debug("Clean features: {}".format(cleaned_features))
         return cleaned_features
@@ -163,7 +164,7 @@ class MutualInformationAnalyzer(object):
         """
 
         # compute pairwise MI for all topN features
-        X = np.ones(shape=(len(features), len(features)), dtype=float)  # distance matrix
+        X = np.zeros(shape=(len(features), len(features)), dtype=float)  # distance matrix
         pairs = list(combinations_with_replacement(features, 2))        # all possible combinations
 
         if self._nmi_cache:
@@ -176,8 +177,8 @@ class MutualInformationAnalyzer(object):
                                             (pair[0] == cached_pair[1] and pair[1] == cached_pair[0]), pairs)
                 # add cached nmi to matrix
                 i, j = features.index(cached_pair[0]), features.index(cached_pair[1])
-                X[i][j] = nmi
-                X[j][i] = nmi
+                X[i][j] = 1 - nmi
+                X[j][i] = 1 - nmi
 
         # map pairs to nmi
         if self.pool is None:
@@ -197,8 +198,8 @@ class MutualInformationAnalyzer(object):
 
             fidx1, fidx2 = pair
             i, j = features.index(fidx1), features.index(fidx2)
-            X[i][j] = nmi
-            X[j][i] = nmi
+            X[i][j] = 1 - nmi
+            X[j][i] = 1 - nmi
 
         # restart pool if multiprocessing
         if self.pool is not None:

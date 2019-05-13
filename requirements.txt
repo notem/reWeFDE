@@ -1,5 +1,6 @@
 statsmodels
 numpy
 scipy
+sklearn
 matlab_wrapper
 pathos

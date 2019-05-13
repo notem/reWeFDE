@@ -18,7 +18,7 @@ class AKDE(object):
         if workspace is None:
             workspace = MatlabWorkspace()
         self.workspace = workspace
-        self.fit = False
+        self.trained = False
 
     def fit(self, data):
         """
@@ -27,7 +27,7 @@ class AKDE(object):
         :return: self
         """
         self.workspace.akde_fit(data, self.id)
-        self.fit = True
+        self.trained = True
         return self
 
     def predict(self, samples):

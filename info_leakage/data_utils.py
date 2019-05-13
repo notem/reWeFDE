@@ -4,7 +4,8 @@ import sys
 
 import numpy as np
 import logging as log
-import pickle
+#import pickle
+import dill
 
 
 def ready_logger():
@@ -85,17 +86,17 @@ class WebsiteData(object):
         return np.copy(self._X[:, feature])
 
 
-def load_data(directory, extension='.csv', delimiter=' '):
+def load_data(directory, extension='.features', delimiter=' ', split_at='-'):
     """
     Load feature files from feature directory.
     :return X - numpy array of data instances w/ shape (n,f)
     :return Y - numpy array of data labels w/ shape (n,1)
     """
     # load pickle file if it exist
-    feat_pkl = os.path.join(directory, "features.pkl")
+    feat_pkl = os.path.join(directory, "features.dill")
     if os.path.exists(feat_pkl):
         with open(feat_pkl, "rb") as fi:
-            X, Y = pickle.load(fi)
+            X, Y = dill.load(fi)
             return X, Y
     else:
         X = []  # feature instances
@@ -106,6 +107,10 @@ def load_data(directory, extension='.csv', delimiter=' '):
             files = [fi for fi in files if fi.endswith(extension)]
 
             def isfloat(element):
+                """
+                Simple function to reliably determine if a string element is a float.
+                Used for feature file filtering.
+                """
                 try:
                     float(element)
                     return True
@@ -113,19 +118,30 @@ def load_data(directory, extension='.csv', delimiter=' '):
                     return False
 
             # read each feature file as CSV
+            class_counter = dict()
+            max_instances = 500
             for file in files:
-                #cls, ins = file.split("-")
-                cls, ls = file.split("_")
+
+                cls, ins = file.split(split_at)
+                if class_counter.get(cls, 0) >= max_instances:
+                    continue
+
+                if int(cls) >= 95:
+                    continue
+
                 with open(os.path.join(root, file), "r") as csvFile:
+                    # load the csv file and parse it into a data instance
                     features = list(csv.reader(csvFile, delimiter=delimiter))
                     features = [[float(f) if isfloat(f) else 0 for f in instance if f] for instance in features]
 
-                    if len(features) >= 500:
-                        features = features[:500]
+                    # cut off instances above the maximum
+                    features = features[:max_instances - class_counter.get(int(cls), 0)]
 
-                        X.extend(features)
-                        Y.extend([int(cls)-1 for _ in range(len(features))])
+                    X.extend(features)
+                    Y.extend([int(cls)-1 for _ in range(len(features))])
+                    class_counter[int(cls)] = class_counter.get(int(cls), 0) + len(features)
 
+        # adjust labels such that they are assigned a number from 0..N
         labels = list(set(Y))
         labels.sort()
         d = dict()
@@ -136,8 +152,8 @@ def load_data(directory, extension='.csv', delimiter=' '):
         # save dataset to pickle file for quicker future loading
         X, Y = np.array(X), np.array(Y)
         with open(feat_pkl, "wb") as fi:
-            pickle.dump((X, Y), fi)
+            dill.dump((X, Y), fi)
 
     # return X and Y as numpy arrays
-    return X,Y
+    return X, Y
 

@@ -3,9 +3,9 @@ Main project file which performs info-leak measure
 """
 import argparse
 import sys
-import pickle
+import dill
 import os
-import signal
+from pathos.multiprocessing import cpu_count
 from pathos.multiprocessing import ProcessPool as Pool
 
 from fingerprint_modeler import WebsiteFingerprintModeler
@@ -13,32 +13,52 @@ from mi_analyzer import MutualInformationAnalyzer
 from data_utils import load_data, WebsiteData, logger
 
 
-def individual_measure(fingerprinter, pool=None):
+def individual_measure(fingerprinter, pool=None, checkpoint=None):
     """
-    :param fingerprinter:
-    :param pool:
-    :return:
+    Perform information leakage analysis for each feature one-by-one.
+    The resulting leakages can be saved in a plain-text ascii checkpoint file,
+     which can be loaded in subsequent runs to avoid re-processing features.
+    :param fingerprinter: WebsiteFingeprintModeler analysis engine
+    :param pool: pathos multiprocess pool
+    :return: list of leakages where the index of each leakage maps to the feature number
     """
+    leakage_indiv = []
+
+    # open a checkpoint file
+    if checkpoint:
+        tmp_file = open(checkpoint, 'a+')
+        past_leaks = [float(line) for line in tmp_file]
+        lines = len(past_leaks)
+        leakage_indiv = past_leaks
+
     # if a pool has been provided, perform computation in parallel
     # otherwise do serial computation
-    if pool is None:
-        proc_results = map(fingerprinter, fingerprinter.data.features)
+    if checkpoint:
+        features = fingerprinter.data.features[lines:]
     else:
-        proc_results = pool.imap(fingerprinter, fingerprinter.data.features)
+        features = fingerprinter.data.features
+    if pool is None:
+        proc_results = map(fingerprinter, features)
+    else:
+        proc_results = pool.imap(fingerprinter, features)
         pool.close()
     size = len(fingerprinter.data.features)  # number of features
 
     logger.info("Begin individual leakage measurements.")
     # measure information leakage
     # log current progress at twenty intervals
-    leakage_indiv = []
     for leakage in proc_results:
         if len(leakage_indiv) % int(size*0.05) == 0:
             logger.info("Progress: {}/{}".format(len(leakage_indiv), size))
         leakage_indiv.append(leakage)
+        if checkpoint:
+            tmp_file.write('{}\n'.format(str(leakage)))
+            tmp_file.flush()
     if pool is not None:
         pool.join()
         pool.restart()
+    if checkpoint:
+        tmp_file.close()
     return leakage_indiv
 
 
@@ -91,13 +111,14 @@ def parse_args():
     # number of processes
     parser.add_argument("--n_procs",
                         type=int,
-                        default=1,
-                        help="The number of processes to use when performing parallel operations")
+                        default=0,
+                        help="The number of processes to use when performing parallel operations. "
+                             "Use '0' to use all available processors.")
+    parser.add_argument("--checkpoint",
+                        type=str,
+                        default='indiv_checkpoint.txt',
+                        help="A file which to save checkpoint information for individual leakage processing.")
     return parser.parse_args()
-
-
-def init_worker():
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def main(args):
@@ -108,10 +129,16 @@ def main(args):
     logger.info("Loading dataset.")
     X, Y = load_data(args.features)
     feature_data = WebsiteData(X, Y)
+    logger.info("Loaded {} sites.".format(len(feature_data.sites)))
     logger.info("Loaded {} instances.".format(len(feature_data)))
 
     # create process pool
-    pool = Pool(args.n_procs, initializer=init_worker)
+    if args.n_procs > 1:
+        pool = Pool(args.n_procs)
+    elif args.n_procs == 0:
+        pool = Pool(cpu_count())
+    else:
+        pool = None
 
     # initialize fingerprint modeler
     fingerprinter = WebsiteFingerprintModeler(feature_data,
@@ -120,23 +147,22 @@ def main(args):
     # perform individual information leakage measurements
     leakage_indiv = None
     if args.individual:
-
         # load previous leakage measurements if possible
         if os.path.exists(args.individual):
             with open(args.individual, "rb") as fi:
                 logger.info("Loading saved individual leakage measures.")
-                leakage_indiv = pickle.load(fi)
+                leakage_indiv = dill.load(fi)
 
         # otherwise do individual measure
         else:
-            leakage_indiv = individual_measure(fingerprinter, pool)
+            leakage_indiv = individual_measure(fingerprinter, pool, args.checkpoint)
 
             # save individual leakage to file
             logger.info("Saving individual leakage to {}.".format(args.individual))
             if os.path.dirname(args.individual):
                 os.makedirs(os.path.dirname(args.individual))
             with open(args.individual, "wb") as fi:
-                pickle.dump(leakage_indiv, fi, 0)
+                dill.dump(leakage_indiv, fi)
 
     # perform combined information leakage measurements
     leakage_joint = None
@@ -146,7 +172,7 @@ def main(args):
         if os.path.exists(args.combined):
             with open(args.combined, "rb") as fi:
                 logger.info("Loading saved joint leakage measures.")
-                leakage_joint = pickle.load(fi)
+                leakage_joint = dill.load(fi)
 
         # otherwise do joint leakage estimation
         else:
@@ -161,13 +187,15 @@ def main(args):
             logger.info("Begin feature pruning.")
             pruned = analyzer.prune()
             with open('top{}.pkl'.format(args.topn), 'w') as fi:
-                pickle.dump(pruned, fi, 0)
+                dill.dump(pruned, fi)
 
             # cluster non-redundant features
             logger.info("Begin feature clustering.")
             clusters = analyzer.cluster(pruned)
             with open('clusters.pkl', 'w') as fi:
-                pickle.dump(clusters, fi, 0)
+                dill.dump(clusters, fi)
+
+            logger.info('Identified {} clusters.'.format(len(clusters)))
 
             logger.info("Begin cluster leakage measurements.")
             # if a pool has been provided, perform computation in parallel
@@ -194,11 +222,9 @@ def main(args):
             if os.path.dirname(args.combined):
                 os.makedirs(os.path.dirname(args.combined))
             with open(args.combined, "wb") as fi:
-                pickle.dump(leakage_joint, fi, 0)
+                dill.dump(leakage_joint, fi)
 
-    # summarize results
-    # TODO
-
+    logger.info('Total estimated leakage: {}'.format(sum(leakage_joint)))
     logger.info("Finished execution.")
 
 
