@@ -10,9 +10,3 @@ Files:
  * fingerprint_modeler.py -- class responsible for processing data for information leakage
  * mi_analyzer -- mutual information analyzer (for redundant feature identification and combined leakage measurements)
  
- 
-Order-of-Goals:
- 1) Reproduce individual feature information leakage analysis
-   * -> TODO: importance sampling for monte-carlo integration
- 2) Reproduce feature clustering for dimension reduction
- 3) Reproduce combined information leakage results 

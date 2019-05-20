@@ -16,21 +16,41 @@ class MutualInformationAnalyzer(object):
         self._nmi_cache = []
         self._mi_cache = []
 
-    def _estimate_nmi(self, feature_pair, workspace=None):
+    def _nmi_helper(self, feature_pair, workspace):
         """
-        Estimate pairwise normalized mutual information value.
-        :param c: Feature number #1
-        :param r: Feature number #2
-        :return: normalized mutual information
+        Calculate the average pairwise mutual information value across sites.
+        This is an approximation of the global MI value, and is used in the original WeFDE implementation.
+        This trick substantially reduced computation time (x5).
+        :param feature_pair: 2-tuple of feature pair to process
+        :param workspace: matlab workspace which to run the process
+        :return: average MI
         """
         c, r = feature_pair
 
-        # setup data array
-        X1 = self.data.get_feature(c)
-        X1 = np.reshape(X1, (X1.shape[0], 1))
-        X2 = self.data.get_feature(r)
-        X2 = np.reshape(X2, (X2.shape[0], 1))
-        X = np.hstack((X1, X2))
+        # calculate the pairwise MI for data for each site
+        mi_list = []
+        for site in self.data.sites:
+
+            # setup data array
+            X1 = self.data.get_feature(c, site)
+            X1 = np.reshape(X1, (X1.shape[0], 1))
+            X2 = self.data.get_feature(r, site)
+            X2 = np.reshape(X2, (X2.shape[0], 1))
+            X = np.hstack((X1, X2))
+
+            mi_list.append(workspace.pairwise_mi(X))
+
+        # return the average of the MIs
+        return sum(mi_list)/len(mi_list)
+
+    def _estimate_nmi(self, feature_pair, workspace=None):
+        """
+        Estimate pairwise normalized mutual information value.
+        :param c: Feature number
+        :param r: Feature number
+        :return: normalized mutual information
+        """
+        c, r = feature_pair
 
         # create a matlab workspace if necessary
         del_workspace = False
@@ -49,23 +69,21 @@ class MutualInformationAnalyzer(object):
             elif pair[0] == r and pair[1] == r:
                 mi_2 = mi
         if mi_1 is None:
-            mi_1 = workspace.pairwise_mi(np.hstack((X1, X1)))
+            mi_1 = self._nmi_helper((c, c), workspace)
             self._mi_cache.append(((c, c), mi_1))
         if mi_2 is None:
-            mi_2 = workspace.pairwise_mi(np.hstack((X2, X2)))
+            mi_2 = self._nmi_helper((r, r), workspace)
             self._mi_cache.append(((r, r), mi_2))
 
         # calculate entropies and mutual information of feature c and r
-        mi = workspace.pairwise_mi(X)
+        mi = self._nmi_helper(feature_pair, workspace)
 
         # delete workspace if necessary
         if del_workspace:
             del workspace
 
         # calculate normalized mutual information
-        nmi = mi/max([mi_1, mi_2])
-
-        return nmi
+        return mi/max([mi_1, mi_2])
 
     def _check_redundancy(self, feature_pair):
         """

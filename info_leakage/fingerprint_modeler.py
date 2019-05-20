@@ -110,17 +110,17 @@ class WebsiteFingerprintModeler(object):
             # transpose so that first index represents each sample
             prob_set = np.array(prob_set).transpose((1, 0))
 
-            # take the log2 of probs?
-            prob_set = [[math.log(prob, 2) if prob > 0 else -300.0 for prob in sample_probs]
-                        for sample_probs in prob_set]
+            ## take the log2 of probs?
+            #prob_set = [[math.log(prob, 2) if prob > 0 else -300.0 for prob in sample_probs]
+            #            for sample_probs in prob_set]
 
-            # don't know what this does?
-            prob_set = [[prob - max(prob_inst) for prob in prob_inst]
-                        for prob_inst in prob_set]
+            ## don't know what this does?
+            #prob_set = [[prob - max(prob_inst) for prob in prob_inst]
+            #            for prob_inst in prob_set]
 
-            # reverse log2
-            prob_set = [[2**prob for prob in prob_inst]
-                        for prob_inst in prob_set]
+            ## reverse log2
+            #prob_set = [[2**prob for prob in prob_inst]
+            #            for prob_inst in prob_set]
 
             # weight by website priors
             prob_temp = [[prob*prior for prob, prior in zip(prob_inst, website_priors)]

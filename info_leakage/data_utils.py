@@ -68,7 +68,7 @@ class WebsiteData(object):
         """
         Return Y
         """
-        return np.copy(self._Y)
+        return self._Y
 
     def get_site(self, label, feature=None):
         """
@@ -76,24 +76,28 @@ class WebsiteData(object):
         """
         f = [True if y == label else False for y in self._Y]
         if feature is not None:
-            return np.copy(self._X[f, feature])
-        return np.copy(self._X[f, :])
+            return self._X[f, feature]
+        return self._X[f, :]
 
-    def get_feature(self, feature):
+    def get_feature(self, feature, site=None):
         """
         Return all X for a specific feature
         """
-        return np.copy(self._X[:, feature])
+        if site is not None:
+            f = [True if y == site else False for y in self._Y]
+            return self._X[f, feature]
+        return self._X[:, feature]
 
 
-def load_data(directory, extension='.features', delimiter=' ', split_at='-'):
+def load_data(directory, extension='.features', delimiter=' ', split_at='-',
+              max_classes=95, max_instances=500, pack_dataset=True):
     """
     Load feature files from feature directory.
     :return X - numpy array of data instances w/ shape (n,f)
     :return Y - numpy array of data labels w/ shape (n,1)
     """
     # load pickle file if it exist
-    feat_pkl = os.path.join(directory, "features.dill")
+    feat_pkl = os.path.join(directory, "features.pkl")
     if os.path.exists(feat_pkl):
         with open(feat_pkl, "rb") as fi:
             X, Y = dill.load(fi)
@@ -118,30 +122,37 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-'):
                     return False
 
             # read each feature file as CSV
-            class_counter = dict()
-            max_instances = 500
+            class_counter = dict()  # track number of instances per class
             for file in files:
 
+                # feature files are of name
                 cls, ins = file.split(split_at)
+
+                # skip if maximum number of instances reached
                 if class_counter.get(cls, 0) >= max_instances:
                     continue
 
-                if int(cls) >= 95:
+                # skip if maximum number of classes reached
+                if int(cls) >= max_classes:
                     continue
 
                 with open(os.path.join(root, file), "r") as csvFile:
+
                     # load the csv file and parse it into a data instance
                     features = list(csv.reader(csvFile, delimiter=delimiter))
                     features = [[float(f) if isfloat(f) else 0 for f in instance if f] for instance in features]
 
-                    # cut off instances above the maximum
+                    # cut off instance count is above the maximum
                     features = features[:max_instances - class_counter.get(int(cls), 0)]
 
                     X.extend(features)
                     Y.extend([int(cls)-1 for _ in range(len(features))])
                     class_counter[int(cls)] = class_counter.get(int(cls), 0) + len(features)
+                    print len(Y)
 
         # adjust labels such that they are assigned a number from 0..N
+        # (required when labels are non-numerical or does not start at 0)
+        # try to keep the class numbers the same if numerical
         labels = list(set(Y))
         labels.sort()
         d = dict()
@@ -150,9 +161,10 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-'):
         Y = list(map(lambda x: d[x], Y))
 
         # save dataset to pickle file for quicker future loading
-        X, Y = np.array(X), np.array(Y)
-        with open(feat_pkl, "wb") as fi:
-            dill.dump((X, Y), fi)
+        if pack_dataset:
+            X, Y = np.array(X), np.array(Y)
+            with open(feat_pkl, "wb") as fi:
+                dill.dump((X, Y), fi)
 
     # return X and Y as numpy arrays
     return X, Y

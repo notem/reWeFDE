@@ -100,7 +100,7 @@ def parse_args():
                              "Higher values result in more accurate measurements, but longer runtimes.")
     # redundancy threshold
     parser.add_argument("--nmi_threshold",
-                        type=int,
+                        type=float,
                         default=0.9,
                         help="The theshold value used to identify redundant features. "
                              "A value between 0.0 and 1.0.")
@@ -224,7 +224,8 @@ def main(args):
             with open(args.combined, "wb") as fi:
                 dill.dump(leakage_joint, fi)
 
-    logger.info('Total estimated leakage: {}'.format(sum(leakage_joint)))
+    if leakage_joint:
+        logger.info('Total estimated leakage: {}'.format(sum(leakage_joint)))
     logger.info("Finished execution.")
 
 
