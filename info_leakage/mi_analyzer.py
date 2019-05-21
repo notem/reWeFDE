@@ -13,7 +13,7 @@ class MutualInformationAnalyzer(object):
         self.topn = topn
         self.leakage = leakage
         self.pool = pool
-        self._nmi_cache = []
+        self._nmi_cache = dict()
         self._mi_cache = []
 
     def _nmi_helper(self, feature_pair, workspace):
@@ -61,19 +61,14 @@ class MutualInformationAnalyzer(object):
         # measure MI for both single features
         # the max of these two values are used to normalize the joint MI
         # these values are saved in a separate internal cache
-        mi_1 = None
-        mi_2 = None
-        for pair, mi in self._mi_cache:
-            if pair[0] == c and pair[1] == c:
-                mi_1 = mi
-            elif pair[0] == r and pair[1] == r:
-                mi_2 = mi
+        mi_1 = self._mi_cache.get('{},{}'.format(c, c), None)
+        mi_2 = self._mi_cache.get('{},{}'.format(r, r), None)
         if mi_1 is None:
             mi_1 = self._nmi_helper((c, c), workspace)
-            self._mi_cache.append(((c, c), mi_1))
+            self._mi_cache['{},{}'.format(c, c)] = mi_1
         if mi_2 is None:
             mi_2 = self._nmi_helper((r, r), workspace)
-            self._mi_cache.append(((r, r), mi_2))
+            self._mi_cache['{},{}'.format(r, r)] = mi_2
 
         # calculate entropies and mutual information of feature c and r
         mi = self._nmi_helper(feature_pair, workspace)
@@ -108,15 +103,15 @@ class MutualInformationAnalyzer(object):
         """
         Reduce the feature-set to a list of top N features which are non-redudant.
         Redundancy is identified by estimating the pair-wise mutual information of features.
-        :return: list of features, length topn
+        :return: list of features having length {topn}
         """
         # results of NMI calculations are saved in list internal to the analyzer
         # reduces the amount of computation required in any subsequent cluster calls
-        self._nmi_cache, self._mi_cache = [], []
+        self._nmi_cache, self._mi_cache = [], dict()
 
-        # list of best features
-        cleaned_features = []
-        pruned_features = []
+        # feature lists
+        cleaned_features = []  # non-redundant
+        pruned_features = []   # redundant
 
         # sort the list of features by their individual leakage
         # we will process these features in the order of their importance
@@ -147,7 +142,7 @@ class MutualInformationAnalyzer(object):
                 # unzip results
                 is_redundant, feature_pair, nmi = res
 
-                # save feature pair with nmi in internal cache
+                # save feature pair with nmi in cache
                 self._nmi_cache.append((feature_pair, nmi))
 
                 # break loop
@@ -168,14 +163,16 @@ class MutualInformationAnalyzer(object):
             else:
                 pruned_features.append(current_feature)
 
-        logger.info('Removed {} redundant features.'.format(len(pruned_features)))
-        logger.debug("Pruned features: {}".format(pruned_features))
-        logger.debug("Clean features: {}".format(cleaned_features))
-        return cleaned_features
+        # return both non-redundant and redundant features
+        # which feature was redundant with which is however not saved
+        return cleaned_features, pruned_features
 
     def cluster(self, features, eps=0.4):
         """
         Use DBSCAN algorithm to cluster topN features based upon their pairwise mutual information.
+        This function must first fill an NxN matrix with NMI feature pair values by retrieving
+          precomputed values from cache or doing computations anew.
+        The DBSCAN model is then fit to this distances grid, and the identified clusters are returned.
         :param features: topN features
         :param eps: DBSCAN eps value
         :return: nested lists where each list contains the a cluster's features
@@ -231,9 +228,9 @@ class MutualInformationAnalyzer(object):
         # organize the topN features into sub-lists where
         # each sub-list contains all features in a cluster
         clusters = []
-        for label in range(min(labels), max(labels)):
+        for label in range(min(labels), max(labels)+1):
             cluster = [features[i] for i, la in enumerate(labels) if la == label]
             clusters.append(cluster)
 
         logger.debug("Clusters: {}".format(labels))
-        return clusters
+        return clusters, X

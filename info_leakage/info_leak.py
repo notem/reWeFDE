@@ -191,31 +191,32 @@ def main(args):
 
             # cluster non-redundant features
             logger.info("Begin feature clustering.")
-            clusters = analyzer.cluster(pruned)
+            clusters, distance_matrix = analyzer.cluster(pruned)
             with open('clusters.pkl', 'w') as fi:
                 dill.dump(clusters, fi)
 
             logger.info('Identified {} clusters.'.format(len(clusters)))
-
             logger.info("Begin cluster leakage measurements.")
-            # if a pool has been provided, perform computation in parallel
-            # otherwise do serial computation
-            if pool is None:
-                proc_results = map(fingerprinter, clusters)
-            else:
-                proc_results = pool.imap(fingerprinter, clusters)
-                pool.close()
+            leakage_joint = fingerprinter.information_leakage(clusters)
 
-            # measure information for each cluster
-            # log current progress at twenty intervals
-            leakage_joint = []
-            for leakage in proc_results:
-                if len(leakage_joint) % int(len(clusters)*0.05) == 0:
-                    logger.info("Progress: {}/{}".format(len(leakage_joint), len(clusters)))
-                leakage_joint.append(leakage)
-            if pool is not None:
-                pool.join()
-                pool.restart()
+            ## if a pool has been provided, perform computation in parallel
+            ## otherwise do serial computation
+            #if pool is None:
+            #    proc_results = map(fingerprinter, clusters)
+            #else:
+            #    proc_results = pool.imap(fingerprinter, clusters)
+            #    pool.close()
+
+            ## measure information for each cluster
+            ## log current progress at twenty intervals
+            #leakage_joint = []
+            #for leakage in proc_results:
+            #    if len(leakage_joint) % int(len(clusters)*0.05) == 0:
+            #        logger.info("Progress: {}/{}".format(len(leakage_joint), len(clusters)))
+            #    leakage_joint.append(leakage)
+            #if pool is not None:
+            #    pool.join()
+            #    pool.restart()
 
             # save individual leakage to file
             logger.info("Saving joint leakage to {}.".format(args.combined))
@@ -224,8 +225,8 @@ def main(args):
             with open(args.combined, "wb") as fi:
                 dill.dump(leakage_joint, fi)
 
-    if leakage_joint:
-        logger.info('Total estimated leakage: {}'.format(sum(leakage_joint)))
+    if leakage_indiv is not None:
+        logger.info("Joint leakage estimation: {} bits".format(leakage_joint))
     logger.info("Finished execution.")
 
 

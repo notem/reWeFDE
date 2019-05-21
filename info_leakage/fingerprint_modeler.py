@@ -58,19 +58,22 @@ class WebsiteFingerprintModeler(object):
         :param sample_size: number of samples to generate
         """
         samples = []
-        for site, mkde in zip(self.data.sites, mkdes):
+        for site_mkdes in mkdes:
+            group_samples = []
+            for site, mkde in zip(self.data.sites, site_mkdes):
 
-            # n = k * pr(c[i]) -- number of samples per site
-            num = int(sample_size * web_priors[site])
+                # n = k * pr(c[i]) -- number of samples per site
+                num = int(sample_size * web_priors[site])
 
-            if num > 0:
-                # sample from pdf(f|c[i])
-                x = mkde.sample(num)
-                samples.extend(x)
+                if num > 0:
+                    # sample from pdf(f|c[i])
+                    x = mkde.sample(num)
+                    group_samples.extend(x)
+            samples.append(group_samples)
 
         return samples
 
-    def information_leakage(self, features):
+    def information_leakage(self, clusters):
         """
         Evaluate the information leakage.
         Computes marginal KDEs for features given a sites using the awkde library.
@@ -80,16 +83,18 @@ class WebsiteFingerprintModeler(object):
         # catch unhandled errors
         try:
             # convert one feature to singular list for comparability
-            if not isinstance(features, Iterable):
-                features = [features]
+            if not isinstance(clusters, Iterable):
+                clusters = [clusters]
+            if not isinstance(clusters[0], Iterable):
+                clusters = [clusters]
 
-            logger.debug("Measuring leakage for {}".format(features))
+            logger.debug("Measuring leakage for {}".format(clusters))
 
             # create a workspace
             workspace = MatlabWorkspace()
 
             # create pdf for sampling and probability calculations
-            mkdes = [self._make_kde(features, site, workspace) for site in self.data.sites]
+            cluster_mkdes = [[self._make_kde(features, site, workspace) for site in self.data.sites] for features in clusters]
 
             # Shannon Entropy func: -p(x)*log2(p(x))
             h = lambda x: -x * math.log(x, 2)
@@ -99,28 +104,26 @@ class WebsiteFingerprintModeler(object):
             H_C = sum([h(prior) for prior in website_priors if prior > 0])
 
             # performing sampling for monte-carlo evaluation of H(C|f)
-            samples = self._sample(mkdes, website_priors, self.sample_size)
+            cluster_samples = self._sample(cluster_mkdes, website_priors, self.sample_size)
 
-            # get probabilities of samples from each website density distribution
-            prob_set = [mkde.predict(samples) for mkde in mkdes]
+            # get probabilities of samples from each feature-website density distribution (for each cluster)
+            cluster_prob_set = [[mkde.predict(samples) for mkde in site_mkdes]
+                                for site_mkdes, samples in zip(cluster_mkdes, cluster_samples)]
+
+            # independence is assumed between clusters
+            # get final joint probabilities by multiplying sample probs of clusters together
+            prob_set = []
+            for i in range(len(cluster_prob_set[0])):
+                prob = 1
+                for j in range(len(cluster_prob_set)):
+                    prob *= cluster_prob_set[j][i]
+                prob_set.append(prob)
 
             # teardown matlab session
             del workspace
 
-            # transpose so that first index represents each sample
+            # transpose array so that first index represents samples, and the second index represents features
             prob_set = np.array(prob_set).transpose((1, 0))
-
-            ## take the log2 of probs?
-            #prob_set = [[math.log(prob, 2) if prob > 0 else -300.0 for prob in sample_probs]
-            #            for sample_probs in prob_set]
-
-            ## don't know what this does?
-            #prob_set = [[prob - max(prob_inst) for prob in prob_inst]
-            #            for prob_inst in prob_set]
-
-            ## reverse log2
-            #prob_set = [[2**prob for prob in prob_inst]
-            #            for prob_inst in prob_set]
 
             # weight by website priors
             prob_temp = [[prob*prior for prob, prior in zip(prob_inst, website_priors)]
@@ -153,7 +156,7 @@ class WebsiteFingerprintModeler(object):
         except not KeyboardInterrupt:
             # in cases where there is an unknown error, save leakage as N/A
             # ignore these features when computing combined leakage
-            logger.exception("Exception when estimating leakage for {}.".format(features))
+            logger.exception("Exception when estimating leakage for {}.".format(clusters))
             return None
 
     def __call__(self, features):
