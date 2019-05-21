@@ -13,8 +13,8 @@ class MutualInformationAnalyzer(object):
         self.topn = topn
         self.leakage = leakage
         self.pool = pool
-        self._nmi_cache = dict()
-        self._mi_cache = []
+        self._mi_cache = dict()
+        self._nmi_cache = []
 
     def _nmi_helper(self, feature_pair, workspace):
         """
