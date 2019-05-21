@@ -79,17 +79,10 @@ def parse_args():
                         type=str,
                         help="Directory which contains files with the .feature extension.")
 
-    # location to save individual measurements,
-    # or location from which to load measurements
-    parser.add_argument("-i", "--individual",
+    parser.add_argument("-o", "--output",
+                        required=True,
                         type=str,
-                        help="The file used to save or load individual leakage measurements.")
-
-    # location to save combined measurements,
-    # or location from which to load measurements
-    parser.add_argument("-c", "--combined",
-                        type=str,
-                        help="The file used to save or load combined leakage measurements.")
+                        help="Directory location where to store analysis results.")
 
     # Optional Arguments
     # number of samples for monte-carlo integration
@@ -114,10 +107,6 @@ def parse_args():
                         default=0,
                         help="The number of processes to use when performing parallel operations. "
                              "Use '0' to use all available processors.")
-    parser.add_argument("--checkpoint",
-                        type=str,
-                        default='indiv_checkpoint.txt',
-                        help="A file which to save checkpoint information for individual leakage processing.")
     return parser.parse_args()
 
 
@@ -140,93 +129,77 @@ def main(args):
     else:
         pool = None
 
+    # directory to save results
+    outdir = args.output
+    if not os.path.isdir(outdir):
+        os.makedirs(outdir)
+
     # initialize fingerprint modeler
     fingerprinter = WebsiteFingerprintModeler(feature_data,
                                               sample_size=args.n_samples)
 
-    # perform individual information leakage measurements
-    leakage_indiv = None
-    if args.individual:
-        # load previous leakage measurements if possible
-        if os.path.exists(args.individual):
-            with open(args.individual, "rb") as fi:
-                logger.info("Loading saved individual leakage measures.")
-                leakage_indiv = dill.load(fi)
+    # load previous leakage measurements if possible
+    indiv_path = os.path.join(outdir, 'indiv.pkl')
+    if os.path.exists(indiv_path):
+        with open(indiv_path, "rb") as fi:
+            logger.info("Loading saved individual leakage measures.")
+            leakage_indiv = dill.load(fi)
 
-        # otherwise do individual measure
-        else:
-            leakage_indiv = individual_measure(fingerprinter, pool, args.checkpoint)
+    # otherwise do individual measure
+    else:
+        leakage_indiv = individual_measure(fingerprinter, pool,
+                                           checkpoint=os.path.join(outdir, 'checkpoint.txt'))
 
-            # save individual leakage to file
-            logger.info("Saving individual leakage to {}.".format(args.individual))
-            if os.path.dirname(args.individual):
-                os.makedirs(os.path.dirname(args.individual))
-            with open(args.individual, "wb") as fi:
-                dill.dump(leakage_indiv, fi)
+        # save individual leakage to file
+        logger.info("Saving individual leakage to {}.".format(args.individual))
+        with open(indiv_path, "wb") as fi:
+            dill.dump(leakage_indiv, fi)
 
     # perform combined information leakage measurements
-    leakage_joint = None
-    if args.combined:
+    # load joint leakage file
+    comb_path = os.path.join(outdir, 'comb.pkl')
+    if os.path.exists(comb_path):
+        with open(args.combined, "rb") as fi:
+            logger.info("Loading saved joint leakage measures.")
+            leakage_joint = dill.load(fi)
 
-        # load joint leakage file
-        if os.path.exists(args.combined):
-            with open(args.combined, "rb") as fi:
-                logger.info("Loading saved joint leakage measures.")
-                leakage_joint = dill.load(fi)
+    # otherwise do joint leakage estimation
+    else:
+        # initialize MI analyzer
+        analyzer = MutualInformationAnalyzer(feature_data,
+                                             leakage_indiv,
+                                             nmi_threshold=args.nmi_threshold,
+                                             topn=args.topn,
+                                             pool=pool)
 
-        # otherwise do joint leakage estimation
-        else:
-            # initialize MI analyzer
-            analyzer = MutualInformationAnalyzer(feature_data,
-                                                 leakage_indiv,
-                                                 nmi_threshold=args.nmi_threshold,
-                                                 topn=args.topn,
-                                                 pool=pool)
+        # process into list of non-redundant features
+        logger.info("Begin feature pruning.")
+        cleaned, pruned = analyzer.prune()
+        with open(os.path.join(outdir, 'top{}_cleaned.pkl'.format(args.topn), 'w')) as fi:
+            dill.dump(cleaned, fi)
+        with open(os.path.join(outdir, 'top{}_redundant.pkl'.format(args.topn)), 'w') as fi:
+            dill.dump(pruned, fi)
 
-            # process into list of non-redundant features
-            logger.info("Begin feature pruning.")
-            pruned = analyzer.prune()
-            with open('top{}.pkl'.format(args.topn), 'w') as fi:
-                dill.dump(pruned, fi)
+        # cluster non-redundant features
+        logger.info("Begin feature clustering.")
+        clusters, distance_matrix = analyzer.cluster(cleaned)
+        with open(os.path.join(outdir, 'distance_matrix.pkl'), 'w') as fi:
+            dill.dump(distance_matrix, fi)
+        with open(os.path.join(outdir, 'clusters.pkl'), 'w') as fi:
+            dill.dump(clusters, fi)
 
-            # cluster non-redundant features
-            logger.info("Begin feature clustering.")
-            clusters, distance_matrix = analyzer.cluster(pruned)
-            with open('clusters.pkl', 'w') as fi:
-                dill.dump(clusters, fi)
+        # perform joint information leakage measurement
+        logger.info('Identified {} clusters.'.format(len(clusters)))
+        logger.info("Begin cluster leakage measurements.")
+        leakage_joint = fingerprinter.information_leakage(clusters)
 
-            logger.info('Identified {} clusters.'.format(len(clusters)))
-            logger.info("Begin cluster leakage measurements.")
-            leakage_joint = fingerprinter.information_leakage(clusters)
+        # save individual leakage to file
+        logger.info("Saving joint leakage to {}.".format(args.combined))
+        if os.path.dirname(args.combined):
+            os.makedirs(os.path.dirname(args.combined))
+        with open(comb_path, "wb") as fi:
+            dill.dump(leakage_joint, fi)
 
-            ## if a pool has been provided, perform computation in parallel
-            ## otherwise do serial computation
-            #if pool is None:
-            #    proc_results = map(fingerprinter, clusters)
-            #else:
-            #    proc_results = pool.imap(fingerprinter, clusters)
-            #    pool.close()
-
-            ## measure information for each cluster
-            ## log current progress at twenty intervals
-            #leakage_joint = []
-            #for leakage in proc_results:
-            #    if len(leakage_joint) % int(len(clusters)*0.05) == 0:
-            #        logger.info("Progress: {}/{}".format(len(leakage_joint), len(clusters)))
-            #    leakage_joint.append(leakage)
-            #if pool is not None:
-            #    pool.join()
-            #    pool.restart()
-
-            # save individual leakage to file
-            logger.info("Saving joint leakage to {}.".format(args.combined))
-            if os.path.dirname(args.combined):
-                os.makedirs(os.path.dirname(args.combined))
-            with open(args.combined, "wb") as fi:
-                dill.dump(leakage_joint, fi)
-
-    if leakage_indiv is not None:
-        logger.info("Joint leakage estimation: {} bits".format(leakage_joint))
     logger.info("Finished execution.")
 
 

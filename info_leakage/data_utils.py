@@ -29,7 +29,7 @@ def ready_logger():
     logger.setLevel(log.NOTSET)
 
     logging_handler_out = log.StreamHandler(sys.stdout)
-    logging_handler_out.setLevel(log.INFO)
+    logging_handler_out.setLevel(log.DEBUG)
     logging_handler_out.addFilter(LessThanFilter(log.WARNING))
 
     logging_handler_err = log.StreamHandler(sys.stderr)
