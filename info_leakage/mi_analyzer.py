@@ -99,7 +99,7 @@ class MutualInformationAnalyzer(object):
         # feature is not redundant
         return False, feature_pair, nmi
 
-    def prune(self):
+    def prune(self, checkpoint=None):
         """
         Reduce the feature-set to a list of top N features which are non-redudant.
         Redundancy is identified by estimating the pair-wise mutual information of features.
@@ -119,6 +119,16 @@ class MutualInformationAnalyzer(object):
         tuples = zip(self.data.features, self.leakage)
         tuples = sorted(tuples, key=lambda x: (-x[1], x[0]))
         logger.debug("Top 50:\t {}".format(tuples[:50]))
+
+        # if checkpointing, open file and read any previously processed features
+        if checkpoint is not None:
+            checkpoint = open(checkpoint, 'w')
+            for line in checkpoint:
+                feature = int(line[1:].strip())
+                if line[0] == '+':
+                    cleaned_features.append(feature)
+                elif line[0] == '-':
+                    pruned_features.append(feature)
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
@@ -160,8 +170,15 @@ class MutualInformationAnalyzer(object):
             if not is_redundant:
                 cleaned_features.append(current_feature)
                 logger.info("Progress: {}/{}".format(len(cleaned_features), self.topn))
+                if checkpoint is not None:
+                    checkpoint.write('+{}\n'.format(current_feature))
             else:
                 pruned_features.append(current_feature)
+                if checkpoint is not None:
+                    checkpoint.write('-{}\n'.format(current_feature))
+
+        if checkpoint is not None:
+            checkpoint.close()
 
         # return both non-redundant and redundant features
         # which feature was redundant with which is however not saved

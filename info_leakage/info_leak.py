@@ -148,7 +148,7 @@ def main(args):
     # otherwise do individual measure
     else:
         leakage_indiv = individual_measure(fingerprinter, pool,
-                                           checkpoint=os.path.join(outdir, 'checkpoint.txt'))
+                                           checkpoint=os.path.join(outdir, 'indiv_checkpoint.txt'))
 
         # save individual leakage to file
         logger.info("Saving individual leakage to {}.".format(args.individual))
@@ -174,7 +174,7 @@ def main(args):
 
         # process into list of non-redundant features
         logger.info("Begin feature pruning.")
-        cleaned, pruned = analyzer.prune()
+        cleaned, pruned = analyzer.prune(checkpoint=os.path.join(outdir, 'prune_checkpoint.txt'))
         with open(os.path.join(outdir, 'top{}_cleaned.pkl'.format(args.topn), 'w')) as fi:
             dill.dump(cleaned, fi)
         with open(os.path.join(outdir, 'top{}_redundant.pkl'.format(args.topn)), 'w') as fi:
