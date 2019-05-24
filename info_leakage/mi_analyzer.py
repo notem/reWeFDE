@@ -246,8 +246,13 @@ class MutualInformationAnalyzer(object):
         # each sub-list contains all features in a cluster
         clusters = []
         for label in range(min(labels), max(labels)+1):
-            cluster = [features[i] for i, la in enumerate(labels) if la == label]
-            clusters.append(cluster)
+            if label >= 0:
+                cluster = [features[i] for i, la in enumerate(labels) if la == label]
+                clusters.append(cluster)
+            else:
+                # treat features that do not cluster (ie. noise) each as their own independent cluster
+                noise = [[features[i]] for i, la in enumerate(labels) if la == label]
+                clusters.extend(noise)
 
         logger.debug("Clusters: {}".format(labels))
         return clusters, X
