@@ -7,9 +7,9 @@ import dill
 import os
 from pathos.multiprocessing import cpu_count
 from pathos.multiprocessing import ProcessPool as Pool
-from info_leakage.fingerprint_modeler import WebsiteFingerprintModeler
-from info_leakage.mi_analyzer import MutualInformationAnalyzer
-from info_leakage.data_utils import load_data, WebsiteData, logger
+from fingerprint_modeler import WebsiteFingerprintModeler
+from mi_analyzer import MutualInformationAnalyzer
+from data_utils import load_data, WebsiteData, logger
 
 
 def individual_measure(fingerprinter, pool=None, checkpoint=None):
