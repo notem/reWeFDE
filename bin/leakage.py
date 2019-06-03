@@ -7,20 +7,34 @@ import dill
 import os
 from pathos.multiprocessing import cpu_count
 from pathos.multiprocessing import ProcessPool as Pool
-
-from fingerprint_modeler import WebsiteFingerprintModeler
-from mi_analyzer import MutualInformationAnalyzer
-from data_utils import load_data, WebsiteData, logger
+from info_leakage.fingerprint_modeler import WebsiteFingerprintModeler
+from info_leakage.mi_analyzer import MutualInformationAnalyzer
+from info_leakage.data_utils import load_data, WebsiteData, logger
 
 
 def individual_measure(fingerprinter, pool=None, checkpoint=None):
     """
     Perform information leakage analysis for each feature one-by-one.
+
     The resulting leakages can be saved in a plain-text ascii checkpoint file,
-     which can be loaded in subsequent runs to avoid re-processing features.
-    :param fingerprinter: WebsiteFingeprintModeler analysis engine
-    :param pool: pathos multiprocess pool
-    :return: list of leakages where the index of each leakage maps to the feature number
+    which can be loaded in subsequent runs to avoid re-processing features.
+
+    Parameters
+    ----------
+    fingerprinter : WebsiteFingerprintModeler
+        initialized fingerprinting engine
+    pool : ProcessPool
+        Pool to use for multiprocessing.
+        Do not perform multiprocessing if None.
+    checkpoint : str
+        Path to ascii file to save individual leakage checkpoint information.
+        Do not perform checkpointing if None.
+
+    Returns
+    -------
+    list
+        list of leakages where the index of each leakage maps to the feature number
+
     """
     leakage_indiv = []
 
@@ -65,10 +79,20 @@ def individual_measure(fingerprinter, pool=None, checkpoint=None):
 def parse_args():
     """
     Parse command line arguments
+
     Accepted arguments:
-      (f)eatures   -- directory which contains feature files
-      (i)ndividual -- pickle file where individual leakage is (to be) saved
-      (c)ombined   -- pickle file where the combined leakage is to be saved
+      (f)eatures    -- directory which contains feature files
+      (o)output     -- directory where to save analysis results
+      n_samples     -- samples for montecarlo
+      nmi_threshold -- redundancy threshold value
+      topn          -- number of features to keep after pruning
+      n_procs       -- number of processes to use for analysis
+
+    Returns
+    -------
+    Namespace
+        Argument namespace object
+
     """
     parser = argparse.ArgumentParser("TODO: Program description")
 
@@ -166,15 +190,15 @@ def main(args):
     # otherwise do joint leakage estimation
     else:
         # initialize MI analyzer
-        analyzer = MutualInformationAnalyzer(feature_data,
-                                             leakage_indiv,
-                                             nmi_threshold=args.nmi_threshold,
-                                             topn=args.topn,
-                                             pool=pool)
+        analyzer = MutualInformationAnalyzer(feature_data, pool=pool)
 
         # process into list of non-redundant features
         logger.info("Begin feature pruning.")
-        cleaned, pruned = analyzer.prune(checkpoint=os.path.join(outdir, 'prune_checkpoint.txt'))
+        cleaned, pruned = analyzer.prune(features=feature_data.features,
+                                         leakage=leakage_indiv,
+                                         nmi_threshold=args.nmi_threshold,
+                                         topn=args.topn,
+                                         checkpoint=os.path.join(outdir, 'prune_checkpoint.txt'))
         with open(os.path.join(outdir, 'top{}_cleaned.pkl'.format(args.topn), 'w')) as fi:
             dill.dump(cleaned, fi)
         with open(os.path.join(outdir, 'top{}_redundant.pkl'.format(args.topn)), 'w') as fi:

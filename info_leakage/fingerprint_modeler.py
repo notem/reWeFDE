@@ -10,10 +10,15 @@ class WebsiteFingerprintModeler(object):
 
     def __init__(self, data, sample_size=5000):
         """
-        Initialize parameters of the fingerprint modeler
-        :param X: instances as numpy matrix
-        :param Y: labels
-        :param sample_size: number of samples to use for monte-carlo estimation
+        Instantiate a fingerprint modeler.
+
+        Parameters
+        ----------
+        data : WebsiteData
+            Website trace data object
+        sample_size : int
+            number of samples to use for monte-carlo estimation
+
         """
         self.data = data
         self.sample_size = sample_size
@@ -21,8 +26,15 @@ class WebsiteFingerprintModeler(object):
     def _make_kde(self, features, site=None, workspace=None):
         """
         Produce AKDE for a single feature or single feature for a particular site.
-        :param features: index of feature(s) of which to model a multi/uni-variate AKDE
-        :param site: (optional) model features only for the given website
+
+        Parameters
+        ----------
+        features : list
+            Feature(s) of which to model a multi/uni-variate AKDE.
+        site : int
+            Model features only for the given website number.
+            Model all sites if None.
+
         """
         if not isinstance(features, Iterable):
             features = [features]
@@ -50,12 +62,26 @@ class WebsiteFingerprintModeler(object):
 
     def _sample(self, mkdes, web_priors, sample_size):
         """
-        Select samples for monte-carlo evaluation.
+        Generate samples from site KDEs.
+
         Sampling is done on each website KDE.
         The number of samples drawn from each website is determined by prior.
-        :param mkdes: list of site KDEs from which to sample
-        :param web_priors: list of website priors
-        :param sample_size: number of samples to generate
+        Selected samples are later used for monte-carlo evaluation.
+
+        Parameters
+        ----------
+        mkdes : list
+            list of site AKDEs from which to sample
+        web_priors : list
+            list of website priors
+        sample_size : int
+            number of samples to generate
+
+        Returns
+        -------
+        list
+            List of instance samples.
+            The dimension of the samples depends on the number of features used to generate the AKDEs.
         """
         samples = []
         for site_mkdes in mkdes:
@@ -75,10 +101,25 @@ class WebsiteFingerprintModeler(object):
 
     def information_leakage(self, clusters):
         """
-        Evaluate the information leakage.
-        Computes marginal KDEs for features given a sites using the awkde library.
-        Conditional entropy estimated via monte-carlo integration.
-        :param features: index of feature(s) whose joint leakage should be produced
+        Evaluate the information leakage for feature(s).
+
+        Computes marginal KDEs for features given a sites using AKDEs.
+        Conditional entropy is then estimated from the distributions via monte-carlo integration.
+        The conditional entropy is then used to compute the leakage for the feature(s)
+
+        Parameters
+        ----------
+        features: list
+            A list of lists. Features is a list of clusters.
+            Each cluster is a list containing the features in the cluster.
+            A singular feature or cluster may be given as the parameter.
+            In those instances, the data will be wrapped in additional lists to match the expected form.
+
+        Returns
+        -------
+        float
+            Estimated information leakage for the features/clusters.
+
         """
         # catch unhandled errors
         try:

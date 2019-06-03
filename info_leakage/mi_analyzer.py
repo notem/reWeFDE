@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 from itertools import repeat, combinations_with_replacement
 from data_utils import logger
@@ -7,23 +8,49 @@ from matlab.wrapper import MatlabWorkspace
 
 class MutualInformationAnalyzer(object):
 
-    def __init__(self, data, leakage, nmi_threshold=0.9, topn=100, pool=None):
+    def __init__(self, data, pool=None):
+        """
+        Instantiate a MutualInformationAnalyzer object.
+
+        Parameters
+        ----------
+        data : WebsiteData
+            Website trace data.
+        pool : ProcessPool
+            An initialized pathos ProcessPool if multiprocessing should be used.
+            Do not do multiprocessing if None.
+
+        Returns
+        -------
+        MutualInformationAnalyzer
+
+        """
         self.data = data
-        self.nmi_threshold = nmi_threshold
-        self.topn = topn
-        self.leakage = leakage
+        self.nmi_threshold = 0.99
         self.pool = pool
         self._mi_cache = dict()
         self._nmi_cache = []
 
     def _nmi_helper(self, feature_pair, workspace):
         """
-        Calculate the average pairwise mutual information value across sites.
+        Calculate the pairwise mutual information estimate.
+
+        Computes an estimate of the average MI for a pair of features across all sites in the dataset.
         This is an approximation of the global MI value, and is used in the original WeFDE implementation.
         This trick substantially reduced computation time (x5).
-        :param feature_pair: 2-tuple of feature pair to process
-        :param workspace: matlab workspace which to run the process
-        :return: average MI
+
+        Parameters
+        ----------
+        feature_pair : tuple
+            2-tuple of feature pair to process
+        workspace : MatlabWorkspace
+            matlab workspace which to run the process
+
+        Returns
+        -------
+        float
+            Averaged MI value
+
         """
         c, r = feature_pair
 
@@ -46,9 +73,19 @@ class MutualInformationAnalyzer(object):
     def _estimate_nmi(self, feature_pair, workspace=None):
         """
         Estimate pairwise normalized mutual information value.
-        :param c: Feature number
-        :param r: Feature number
-        :return: normalized mutual information
+
+        Parameters
+        ----------
+        feature_pair : tuple
+            2-tuple of feature pair to process
+        workspace : MatlabWorkspace
+            matlab workspace which to run the process
+
+        Returns
+        -------
+        float
+            Normalized MI value between 0.0 and 1.0.
+
         """
         c, r = feature_pair
 
@@ -83,8 +120,16 @@ class MutualInformationAnalyzer(object):
     def _check_redundancy(self, feature_pair):
         """
         Perform pairwise mutual information analysis to identify feature redundancy.
-        :param feature_pair: 2-tuple containing features to compare
-        :return: 3-tuple (redundancy, feature_pair, nmi_value)
+
+        Parameters
+        ----------
+        feature_pair : tuple
+            2-tuple containing features to compare
+
+        Returns
+        -------
+        tuple
+            Tuple of three object: (redundancy, feature_pair, nmi_value)
         """
         feature1, feature2 = feature_pair
 
@@ -99,15 +144,40 @@ class MutualInformationAnalyzer(object):
         # feature is not redundant
         return False, feature_pair, nmi
 
-    def prune(self, checkpoint=None):
+    def prune(self, features, leakage, checkpoint=None, nmi_threshold=0.9, topn=100):
         """
-        Reduce the feature-set to a list of top N features which are non-redudant.
+        Reduce the feature-set to a list of top features which are non-redundant.
+
         Redundancy is identified by estimating the pair-wise mutual information of features.
-        :return: list of features having length {topn}
+        The algorithm will find up to a maximum of ``topn`` non-redundant features before ending.
+        If the MIAnalyzer was instantiated with a ``pool``, NMI calculations will be performed in parallel.
+
+        Parameters
+        ----------
+        features : list
+            List of features from which to prune redundant features.
+        leakage : ndarray
+            Individual leakage values for features in WebsiteData.
+            Of shape Nx1 where N is feature count.
+        checkpoint : str
+            Path to plaintext file to store feature redundancy checkpoint information.
+            Do not perform checkpointing if None is used.
+        nmi_threshold : float
+            Threshold value used to identify redundant features.
+            Features with NMI values greater than the threshold value are pruned.
+        topn : int
+            Number of features to save when pruning is performed.
+
+        Returns
+        -------
+        list
+            Features list having variable length up to ``topn``.
         """
         # results of NMI calculations are saved in list internal to the analyzer
         # reduces the amount of computation required in any subsequent cluster calls
         self._nmi_cache, self._mi_cache = [], dict()
+
+        self.nmi_threshold = nmi_threshold
 
         # feature lists
         cleaned_features = []  # non-redundant
@@ -116,9 +186,10 @@ class MutualInformationAnalyzer(object):
         # sort the list of features by their individual leakage
         # we will process these features in the order of their importance
         logger.debug("Sorting features by individual leakage.")
-        tuples = zip(self.data.features, self.leakage)
+        tuples = zip(self.data.features, leakage)
+        tuples = [tuples[feature] for feature in features]
         tuples = sorted(tuples, key=lambda x: (-x[1], x[0]))
-        logger.debug("Top 50:\t {}".format(tuples[:50]))
+        logger.debug("Top 20:\t {}".format(tuples[:20]))
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
@@ -132,7 +203,7 @@ class MutualInformationAnalyzer(object):
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
-        while tuples and len(cleaned_features) < self.topn:
+        while tuples and len(cleaned_features) < topn:
 
             # the next most important feature
             current_feature = tuples.pop(0)[0]
@@ -169,7 +240,7 @@ class MutualInformationAnalyzer(object):
             # other top features, add current feature to top features list
             if not is_redundant:
                 cleaned_features.append(current_feature)
-                logger.info("Progress: {}/{}".format(len(cleaned_features), self.topn))
+                logger.info("Progress: {}/{}".format(len(cleaned_features), min(topn, len(features))))
                 if checkpoint is not None:
                     checkpoint.write('+{}\n'.format(current_feature))
             else:
@@ -186,13 +257,25 @@ class MutualInformationAnalyzer(object):
 
     def cluster(self, features, eps=0.4):
         """
+        Find clusters in provided features.
+
         Use DBSCAN algorithm to cluster topN features based upon their pairwise mutual information.
-        This function must first fill an NxN matrix with NMI feature pair values by retrieving
-          precomputed values from cache or doing computations anew.
+        First fill an NxN matrix with NMI feature pair values.
+        NMI values may be retrieved from the MIAnalyzer's ``_nmi_cache`` or by doing computations anew.
         The DBSCAN model is then fit to this distances grid, and the identified clusters are returned.
-        :param features: topN features
-        :param eps: DBSCAN eps value
-        :return: nested lists where each list contains the a cluster's features
+
+        Parameters
+        ----------
+        features : list
+            A list of features to cluster
+        eps : float
+            Threshold value for DBCluster clustering.
+            Features with values above this threshold will form clusters.
+
+        Returns
+        -------
+        list
+            Nested lists where each list contains the  cluster's features.
         """
 
         # compute pairwise MI for all topN features

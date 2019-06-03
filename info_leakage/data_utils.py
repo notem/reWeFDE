@@ -11,7 +11,14 @@ import dill
 def ready_logger():
     """
     Prepare python logging object.
+
+    Logger is configured to print DEBUG & INFO messages to stdout.
+    ERROR and WARNING logs are printed to stderr.
     Modify this function to customize logging behavior
+
+    Returns
+    -------
+    Logger
     """
     class LessThanFilter(log.Filter):
         def __init__(self, exclusive_maximum, name=""):
@@ -67,12 +74,30 @@ class WebsiteData(object):
     def get_labels(self):
         """
         Return Y
+
+        Returns
+        -------
+        ndarray
+
         """
         return self._Y
 
     def get_site(self, label, feature=None):
         """
-        Return X for given site. Optionally, also filter by feature.
+        Return X for given site.
+
+        Parameters
+        ----------
+        label : int
+            The site label to load
+        feature : int
+            The feature number to load.
+            Load all features if None.
+
+        Returns
+        -------
+        ndarray
+
         """
         f = [True if y == label else False for y in self._Y]
         if feature is not None:
@@ -82,6 +107,19 @@ class WebsiteData(object):
     def get_feature(self, feature, site=None):
         """
         Return all X for a specific feature
+
+        Parameters
+        ----------
+        feature : int
+            The feature which to load.
+        site : int
+            The site which to load.
+            Load from all sites if None.
+
+        Returns
+        -------
+        ndarray
+
         """
         if site is not None:
             f = [True if y == site else False for y in self._Y]
@@ -90,15 +128,42 @@ class WebsiteData(object):
 
 
 def load_data(directory, extension='.features', delimiter=' ', split_at='-',
-              max_classes=95, max_instances=500, pack_dataset=True):
+              max_classes=99999, max_instances=99999, pack_dataset=True):
     """
-    Load feature files from feature directory.
-    :return X - numpy array of data instances w/ shape (n,f)
-    :return Y - numpy array of data labels w/ shape (n,1)
+    Load feature files from a directory.
+
+    Parameters
+    ----------
+    directory : str
+        System file path to a directory containing feature files.
+    extension : str
+        File extension used to identify feature files.
+    delimiter : str
+        Character string used to split features in the feature files.
+    split_at : str
+        Character string used to split feature file names.
+        First substring identifies the class, while the second substring identifies the instance number.
+        Instance number is ignored.
+    max_classes : int
+        Maximum number of classes to load.
+    max_instances : int
+        Maximum number of instances to load per class.
+    pack_dataset : bool
+        Determines whether or not ascii feature files should be packed into a condensed pickle file.
+        If True, the function will attempt to load from the packed feature file as well.
+        The packed feature file is saved in the root of the same directory as the feature files.
+
+    Returns
+    -------
+    ndarray
+        Numpy array of Nxf containing site visit feature instances.
+    ndarray
+        Numpy array of Nx1 containing the labels for site visits.
+
     """
     # load pickle file if it exist
     feat_pkl = os.path.join(directory, "features.pkl")
-    if os.path.exists(feat_pkl):
+    if os.path.exists(feat_pkl) and pack_dataset:
         with open(feat_pkl, "rb") as fi:
             X, Y = dill.load(fi)
             return X, Y
