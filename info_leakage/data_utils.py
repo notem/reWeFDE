@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import csv
 import os
 import sys
@@ -54,8 +55,13 @@ def ready_logger():
     return logger
 
 
-# logging object to be used throughout the application
 logger = ready_logger()
+"""Logger: logging object to be used throughout the application
+
+The logger object is built using the ready_logger() function, 
+and is used as a mechanism to control output to standard output/error.
+The design of this is that the logger object should be imported and used by all other scripts in the module.
+"""
 
 
 class WebsiteData(object):

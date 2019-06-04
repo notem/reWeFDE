@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Main project file which performs info-leak measure
 """

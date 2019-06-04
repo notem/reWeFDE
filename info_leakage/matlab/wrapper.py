@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
 import matlab_wrapper
 import numpy as np
 import os
 import random
-from info_leakage.data_utils import logger as log
+import sys
+sys.path.insert(0, '../')
+from data_utils import logger as log
 
 
 class AKDE(object):

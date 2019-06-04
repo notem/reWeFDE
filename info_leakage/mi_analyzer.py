@@ -4,6 +4,7 @@ from itertools import repeat, combinations_with_replacement
 from data_utils import logger
 from sklearn.cluster import DBSCAN
 from matlab.wrapper import MatlabWorkspace
+import dill
 
 
 class MutualInformationAnalyzer(object):
@@ -193,7 +194,7 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint = open(checkpoint, 'w')
+            checkpoint = open(checkpoint, 'r+')
             for line in checkpoint:
                 feature = int(line[1:].strip())
                 if line[0] == '+':

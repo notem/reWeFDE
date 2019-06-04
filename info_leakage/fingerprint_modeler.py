@@ -1,4 +1,4 @@
-
+# -*- coding: utf-8 -*-
 import math
 from data_utils import logger
 from collections import Iterable
@@ -109,7 +109,7 @@ class WebsiteFingerprintModeler(object):
 
         Parameters
         ----------
-        features: list
+        clusters: list
             A list of lists. Features is a list of clusters.
             Each cluster is a list containing the features in the cluster.
             A singular feature or cluster may be given as the parameter.
