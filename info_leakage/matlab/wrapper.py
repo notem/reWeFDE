@@ -230,5 +230,8 @@ class MatlabWorkspace(object):
             return 0.0
 
     def __exit__(self):
-        del self.session
+        try:
+            del self.session
+        except:
+            pass
 

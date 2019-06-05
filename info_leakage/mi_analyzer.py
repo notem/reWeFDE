@@ -135,7 +135,11 @@ class MutualInformationAnalyzer(object):
         feature1, feature2 = feature_pair
 
         # calculate the normalized mutual information
-        nmi = self._estimate_nmi((feature1, feature2))
+        try:
+            nmi = self._estimate_nmi((feature1, feature2))
+        except Exception, e:
+            nmi = 0.0
+            logger.warn("Failed to estimate nmi({},{}): {}".format(feature1, feature2, e.message))
         logger.debug("| nmi({},{}) = {}".format(feature1, feature2, nmi))
 
         # prune if nmi is above threshold
@@ -194,13 +198,21 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint = open(checkpoint, 'r+')
+            checkpoint = open(checkpoint, 'w+')
             for line in checkpoint:
-                feature = int(line[1:].strip())
-                if line[0] == '+':
-                    cleaned_features.append(feature)
-                elif line[0] == '-':
-                    pruned_features.append(feature)
+                try:
+                    if line[0] == '+':
+                        feature = int(line[1:].strip())
+                        cleaned_features.append(feature)
+                    elif line[0] == '-':
+                        feature = int(line[1:].strip())
+                        pruned_features.append(feature)
+                    elif line[0] == '=':
+                        a, b, c = line[1:].split(',')
+                        self._nmi_cache.append((int(a), int(b), float(c)))
+                except:
+                    pass
+            tuples = filter(lambda tup: tup[0] not in cleaned_features and tup[0] not in pruned_features, tuples)
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
@@ -226,6 +238,8 @@ class MutualInformationAnalyzer(object):
 
                 # save feature pair with nmi in cache
                 self._nmi_cache.append((feature_pair, nmi))
+                if checkpoint is not None:
+                    checkpoint.write('={},{},{}\n'.format(feature_pair[0], feature_pair[1], nmi))
 
                 # break loop
                 if is_redundant:
@@ -276,7 +290,8 @@ class MutualInformationAnalyzer(object):
         Returns
         -------
         list
-            Nested lists where each list contains the  cluster's features.
+            Nested lists where each list contains the cluster's features.
+            Features that do not fall into a cluster are given their own cluster (ie. singular list).
         """
 
         # compute pairwise MI for all topN features
