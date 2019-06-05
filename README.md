@@ -39,7 +39,7 @@ pip install -r requirements.txt
 
 Compile and install required Matlab @kde library:
 ```bash
-matlab -nodisplay -nosplash -nodesktop -r "try, run('./info_leak/matlab/@kde/mex/makemex.m'), catch me, fprintf('%s / %s\n',me.identifier,me.message), end, exit"
+matlab -nodisplay -nosplash -nodesktop -r "try, run('./info_leakage/matlab/@kde/mex/makemex.m'), catch me, fprintf('%s / %s\n',me.identifier,me.message), end, exit"
 ```
 #### Organization
 

@@ -127,7 +127,7 @@ class MatlabWorkspace(object):
 
         """
         # start new matlab workspace
-        self.session = matlab_wrapper.MatlabSession()
+        self.session = matlab_wrapper.MatlabSession(options="-nodisplay -nodesktop -nosplash")
 
         # add akde matlab files to the workspace's search path
         path = os.path.dirname(__file__)
