@@ -55,7 +55,7 @@ class WebsiteFingerprintModeler(object):
             if X is None:
                 X = X_f
             else:
-                np.hstack((X, X_f))
+                X = np.hstack((X, X_f))
 
         # fit KDE on X
         return AKDE(workspace).fit(X)

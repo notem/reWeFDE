@@ -198,7 +198,7 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint = open(checkpoint, 'w+')
+            checkpoint = open(checkpoint, 'a+')
             for line in checkpoint:
                 try:
                     if line[0] == '+':
@@ -209,10 +209,11 @@ class MutualInformationAnalyzer(object):
                         pruned_features.append(feature)
                     elif line[0] == '=':
                         a, b, c = line[1:].split(',')
-                        self._nmi_cache.append((int(a), int(b), float(c)))
+                        self._nmi_cache.append(((int(a), int(b)), float(c)))
                 except:
                     pass
             tuples = filter(lambda tup: tup[0] not in cleaned_features and tup[0] not in pruned_features, tuples)
+        print(cleaned_features)
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected

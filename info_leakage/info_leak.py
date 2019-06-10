@@ -200,9 +200,9 @@ def main(args):
                                          nmi_threshold=args.nmi_threshold,
                                          topn=args.topn,
                                          checkpoint=os.path.join(outdir, 'prune_checkpoint.txt'))
-        with open(os.path.join(outdir, 'top{}_cleaned.pkl'.format(args.topn), 'w')) as fi:
+        with open(os.path.join(outdir, 'top{}_cleaned.pkl'.format(args.topn)), 'wb') as fi:
             dill.dump(cleaned, fi)
-        with open(os.path.join(outdir, 'top{}_redundant.pkl'.format(args.topn)), 'w') as fi:
+        with open(os.path.join(outdir, 'top{}_redundant.pkl'.format(args.topn)), 'wb') as fi:
             dill.dump(pruned, fi)
 
         # cluster non-redundant features
