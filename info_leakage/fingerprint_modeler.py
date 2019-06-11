@@ -2,7 +2,7 @@
 import math
 from data_utils import logger
 from collections import Iterable
-from matlab.wrapper import MatlabWorkspace, AKDE
+from kde_wrapper import AKDE
 import numpy as np
 
 
@@ -23,7 +23,7 @@ class WebsiteFingerprintModeler(object):
         self.data = data
         self.sample_size = sample_size
 
-    def _make_kde(self, features, site=None, workspace=None):
+    def _make_kde(self, features, site=None):
         """
         Produce AKDE for a single feature or single feature for a particular site.
 
@@ -58,7 +58,7 @@ class WebsiteFingerprintModeler(object):
                 X = np.hstack((X, X_f))
 
         # fit KDE on X
-        return AKDE(workspace).fit(X)
+        return AKDE(X)
 
     def _sample(self, mkdes, web_priors, sample_size):
         """
@@ -131,11 +131,8 @@ class WebsiteFingerprintModeler(object):
 
             logger.debug("Measuring leakage for {}".format(clusters))
 
-            # create a workspace
-            workspace = MatlabWorkspace()
-
             # create pdf for sampling and probability calculations
-            cluster_mkdes = [[self._make_kde(features, site, workspace) for site in self.data.sites] for features in clusters]
+            cluster_mkdes = [[self._make_kde(features, site) for site in self.data.sites] for features in clusters]
 
             # Shannon Entropy func: -p(x)*log2(p(x))
             h = lambda x: -x * math.log(x, 2)
@@ -159,9 +156,6 @@ class WebsiteFingerprintModeler(object):
                 for j in range(len(cluster_prob_set)):
                     prob *= cluster_prob_set[j][i]
                 prob_set.append(prob)
-
-            # teardown matlab session
-            del workspace
 
             # transpose array so that first index represents samples, and the second index represents features
             prob_set = np.array(prob_set).transpose((1, 0))

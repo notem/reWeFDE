@@ -3,7 +3,8 @@ import numpy as np
 from itertools import repeat, combinations_with_replacement
 from data_utils import logger
 from sklearn.cluster import DBSCAN
-from matlab.wrapper import MatlabWorkspace
+from kde_wrapper import AKDE
+from collections import Iterable
 import dill
 
 
@@ -32,10 +33,57 @@ class MutualInformationAnalyzer(object):
         self._mi_cache = dict()
         self._nmi_cache = []
 
-    def _nmi_helper(self, feature_pair, workspace):
+    def _estimate_entropy(self, features, site):
         """
-        Calculate the pairwise mutual information estimate.
+        Produce an entropy estimate using the mean log-likelihood.
+        To estimate entropy, first an AKDE model is fit to the data for the features & sites.
+        The mean log-likelyhood is then computed by dividing total log-likelihood by the number of data instances.
+        This entropy estimate assumes that all data instances have the same likelihood of occurring (ie. equal weights).
 
+        Parameters
+        ----------
+        features : list
+            List of feature numbers to represent in the data.
+        sites : list
+            List of site numbers to represent in the data.
+
+        Returns
+        -------
+        float
+            Entropy estimate for the given data.
+        """
+        # wrap arguments into lists if singular items were given
+        if not isinstance(features, Iterable):
+            features = [features]
+
+        # data array used to fit KDE
+        X = None
+        for feature in features:
+
+            # get feature vector
+            if site is not None:    # pdf(f|c)
+                X_f = self.data.get_site(site, feature)
+            else:       # pdf(f)
+                X_f = self.data.get_feature(feature)
+            X_f = np.reshape(X_f, (X_f.shape[0], 1))
+
+            # extend X w/ feature vector if it has been initialized
+            # otherwise, initalize X using the current feature vector
+            if X is None:
+                X = X_f
+            else:
+                X = np.hstack((X, X_f))
+
+        # fit a kde
+        kde = AKDE(X)
+
+        # return the negative of the kde score (ie. total log likelihood) by the number of instances in data
+        # this computation assumes that all data instances occur with equal weight
+        return kde.entropy()
+
+    def _avg_mi(self, feature_pair):
+        """
+        Calculate the average pairwise mutual information estimate.
         Computes an estimate of the average MI for a pair of features across all sites in the dataset.
         This is an approximation of the global MI value, and is used in the original WeFDE implementation.
         This trick substantially reduced computation time (x5).
@@ -44,34 +92,30 @@ class MutualInformationAnalyzer(object):
         ----------
         feature_pair : tuple
             2-tuple of feature pair to process
-        workspace : MatlabWorkspace
-            matlab workspace which to run the process
 
         Returns
         -------
         float
             Averaged MI value
-
         """
         c, r = feature_pair
 
         # calculate the pairwise MI for data for each site
         mi_list = []
         for site in self.data.sites:
+            # estimate entropy for each distribution
+            c_entropy = self._estimate_entropy([c, c], site)
+            r_entropy = self._estimate_entropy([r, r], site)
+            cr_entropy = self._estimate_entropy([c, r], site)
 
-            # setup data array
-            X1 = self.data.get_feature(c, site)
-            X1 = np.reshape(X1, (X1.shape[0], 1))
-            X2 = self.data.get_feature(r, site)
-            X2 = np.reshape(X2, (X2.shape[0], 1))
-            X = np.hstack((X1, X2))
-
-            mi_list.append(workspace.pairwise_mi(X))
+            # calculate mutual information
+            mi_estimate = c_entropy + r_entropy - cr_entropy
+            mi_list.append(mi_estimate)
 
         # return the average of the MIs
-        return sum(mi_list)/len(mi_list)
+        return sum(mi_list) / len(mi_list)
 
-    def _estimate_nmi(self, feature_pair, workspace=None):
+    def _estimate_nmi(self, feature_pair):
         """
         Estimate pairwise normalized mutual information value.
 
@@ -79,8 +123,6 @@ class MutualInformationAnalyzer(object):
         ----------
         feature_pair : tuple
             2-tuple of feature pair to process
-        workspace : MatlabWorkspace
-            matlab workspace which to run the process
 
         Returns
         -------
@@ -90,30 +132,20 @@ class MutualInformationAnalyzer(object):
         """
         c, r = feature_pair
 
-        # create a matlab workspace if necessary
-        del_workspace = False
-        if workspace is None:
-            del_workspace = True
-            workspace = MatlabWorkspace()
-
         # measure MI for both single features
         # the max of these two values are used to normalize the joint MI
         # these values are saved in a separate internal cache
         mi_1 = self._mi_cache.get('{},{}'.format(c, c), None)
         mi_2 = self._mi_cache.get('{},{}'.format(r, r), None)
         if mi_1 is None:
-            mi_1 = self._nmi_helper((c, c), workspace)
+            mi_1 = self._avg_mi((c, c))
             self._mi_cache['{},{}'.format(c, c)] = mi_1
         if mi_2 is None:
-            mi_2 = self._nmi_helper((r, r), workspace)
+            mi_2 = self._avg_mi((r, r))
             self._mi_cache['{},{}'.format(r, r)] = mi_2
 
         # calculate entropies and mutual information of feature c and r
-        mi = self._nmi_helper(feature_pair, workspace)
-
-        # delete workspace if necessary
-        if del_workspace:
-            del workspace
+        mi = self._avg_mi(feature_pair)
 
         # calculate normalized mutual information
         return mi/max([mi_1, mi_2])
