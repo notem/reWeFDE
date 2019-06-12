@@ -5,6 +5,7 @@ from data_utils import logger
 from sklearn.cluster import DBSCAN
 from kde_wrapper import AKDE
 from collections import Iterable
+from scipy import stats
 import dill
 
 
@@ -56,8 +57,8 @@ class MutualInformationAnalyzer(object):
         if not isinstance(features, Iterable):
             features = [features]
 
-        # data array used to fit KDE
-        X = None
+        X = None   # data array used to fit KDE
+        bw = []    # kernel bw for each feature
         for feature in features:
 
             # get feature vector
@@ -67,6 +68,11 @@ class MutualInformationAnalyzer(object):
                 X_f = self.data.get_feature(feature)
             X_f = np.reshape(X_f, (X_f.shape[0], 1))
 
+            # compute simple bandwidth estimate for feature
+            # using Rule of Thumb or Hall's bw estimation seems to result in invalid entropy estimates
+            bw_f = 0.9 * min(np.std(X_f), stats.iqr(X_f)/1.34) * X_f.shape[0]**(-0.2)
+            bw.append(bw_f if bw_f > 0 else 0.1)
+
             # extend X w/ feature vector if it has been initialized
             # otherwise, initalize X using the current feature vector
             if X is None:
@@ -75,7 +81,7 @@ class MutualInformationAnalyzer(object):
                 X = np.hstack((X, X_f))
 
         # fit a kde
-        kde = AKDE(X)
+        kde = AKDE(X, bw=np.array(bw))
 
         # return the negative of the kde score (ie. total log likelihood) by the number of instances in data
         # this computation assumes that all data instances occur with equal weight
@@ -104,8 +110,8 @@ class MutualInformationAnalyzer(object):
         mi_list = []
         for site in self.data.sites:
             # estimate entropy for each distribution
-            c_entropy = self._estimate_entropy([c, c], site)
-            r_entropy = self._estimate_entropy([r, r], site)
+            c_entropy = self._estimate_entropy([c], site)
+            r_entropy = self._estimate_entropy([r], site)
             cr_entropy = self._estimate_entropy([c, r], site)
 
             # calculate mutual information
@@ -167,11 +173,7 @@ class MutualInformationAnalyzer(object):
         feature1, feature2 = feature_pair
 
         # calculate the normalized mutual information
-        try:
-            nmi = self._estimate_nmi((feature1, feature2))
-        except Exception, e:
-            nmi = 0.0
-            logger.warn("Failed to estimate nmi({},{}): {}".format(feature1, feature2, e.message))
+        nmi = self._estimate_nmi((feature1, feature2))
         logger.debug("| nmi({},{}) = {}".format(feature1, feature2, nmi))
 
         # prune if nmi is above threshold
@@ -223,7 +225,7 @@ class MutualInformationAnalyzer(object):
         # sort the list of features by their individual leakage
         # we will process these features in the order of their importance
         logger.debug("Sorting features by individual leakage.")
-        tuples = zip(self.data.features, leakage)
+        tuples = list(zip(self.data.features, leakage))
         tuples = [tuples[feature] for feature in features]
         tuples = sorted(tuples, key=lambda x: (-x[1], x[0]))
         logger.debug("Top 20:\t {}".format(tuples[:20]))
@@ -244,8 +246,7 @@ class MutualInformationAnalyzer(object):
                         self._nmi_cache.append(((int(a), int(b)), float(c)))
                 except:
                     pass
-            tuples = filter(lambda tup: tup[0] not in cleaned_features and tup[0] not in pruned_features, tuples)
-        print(cleaned_features)
+            tuples = list(filter(lambda tup: tup[0] not in cleaned_features and tup[0] not in pruned_features, tuples))
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
@@ -309,7 +310,7 @@ class MutualInformationAnalyzer(object):
 
         Use DBSCAN algorithm to cluster topN features based upon their pairwise mutual information.
         First fill an NxN matrix with NMI feature pair values.
-        NMI values may be retrieved from the MIAnalyzer's ``_nmi_cache`` or by doing computations anew.
+        NMI values may be retrieved from the MIAnalyzer's internal cache or by doing computations anew.
         The DBSCAN model is then fit to this distances grid, and the identified clusters are returned.
 
         Parameters

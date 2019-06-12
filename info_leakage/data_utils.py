@@ -219,7 +219,6 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-',
                     X.extend(features)
                     Y.extend([int(cls)-1 for _ in range(len(features))])
                     class_counter[int(cls)] = class_counter.get(int(cls), 0) + len(features)
-                    print len(Y)
 
         # adjust labels such that they are assigned a number from 0..N
         # (required when labels are non-numerical or does not start at 0)

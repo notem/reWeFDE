@@ -1,8 +1,6 @@
-statsmodels
 numpy
+statsmodels
 scipy
 sklearn
-matlab_wrapper
 pathos
 matplotlib
-KDEpy

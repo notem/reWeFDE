@@ -170,7 +170,8 @@ class WebsiteFingerprintModeler(object):
 
             # check for calculation error?
             for prob_inst in prob_indiv:
-                assert(sum(prob_inst) > 0.99)
+                if sum(prob_inst) < 0.99:
+                    logger.warn('Sum of probs does not equal 1! {}'.format(sum(prob_inst)))
 
             # compute entropy for instances
             entropies = [sum([h(prob) for prob in prob_inst if prob > 0])

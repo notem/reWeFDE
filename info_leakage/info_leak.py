@@ -176,7 +176,7 @@ def main(args):
                                            checkpoint=os.path.join(outdir, 'indiv_checkpoint.txt'))
 
         # save individual leakage to file
-        logger.info("Saving individual leakage to {}.".format(args.individual))
+        logger.info("Saving individual leakage to {}.".format(indiv_path))
         with open(indiv_path, "wb") as fi:
             dill.dump(leakage_indiv, fi)
 
