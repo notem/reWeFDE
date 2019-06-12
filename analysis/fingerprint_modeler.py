@@ -2,7 +2,7 @@
 import math
 from data_utils import logger
 from collections import Iterable
-from kde_wrapper import AKDE
+from kde_wrapper import KDE
 import numpy as np
 
 
@@ -35,6 +35,9 @@ class WebsiteFingerprintModeler(object):
             Model features only for the given website number.
             Model all sites if None.
 
+        Returns
+        -------
+
         """
         if not isinstance(features, Iterable):
             features = [features]
@@ -58,7 +61,7 @@ class WebsiteFingerprintModeler(object):
                 X = np.hstack((X, X_f))
 
         # fit KDE on X
-        return AKDE(X)
+        return KDE(X)
 
     def _sample(self, mkdes, web_priors, sample_size):
         """

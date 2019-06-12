@@ -3,7 +3,7 @@ import numpy as np
 from itertools import repeat, combinations_with_replacement
 from data_utils import logger
 from sklearn.cluster import DBSCAN
-from kde_wrapper import AKDE
+from kde_wrapper import KDE
 from collections import Iterable
 from scipy import stats
 import dill
@@ -81,7 +81,7 @@ class MutualInformationAnalyzer(object):
                 X = np.hstack((X, X_f))
 
         # fit a kde
-        kde = AKDE(X, bw=np.array(bw))
+        kde = KDE(X, bw=np.array(bw))
 
         # return the negative of the kde score (ie. total log likelihood) by the number of instances in data
         # this computation assumes that all data instances occur with equal weight
