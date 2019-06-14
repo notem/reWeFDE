@@ -2,11 +2,13 @@
 import csv
 import os
 import sys
-
 import numpy as np
 import logging as log
-#import pickle
 import dill
+
+
+# set to True to enable debugging information
+DEBUG_ON = False
 
 
 def ready_logger():
@@ -37,7 +39,7 @@ def ready_logger():
     logger.setLevel(log.NOTSET)
 
     logging_handler_out = log.StreamHandler(sys.stdout)
-    logging_handler_out.setLevel(log.DEBUG)
+    logging_handler_out.setLevel(log.DEBUG if DEBUG_ON else log.INFO)
     logging_handler_out.addFilter(LessThanFilter(log.WARNING))
 
     logging_handler_err = log.StreamHandler(sys.stderr)
@@ -71,8 +73,8 @@ class WebsiteData(object):
     def __init__(self, X, Y):
         self._X = X
         self._Y = Y
-        self.features = range(X.shape[1])
-        self.sites = range(len(np.unique(self._Y)))
+        self.features = list(range(X.shape[1]))
+        self.sites = list(range(len(np.unique(self._Y))))
 
     def __len__(self):
         return self._X.shape[0]

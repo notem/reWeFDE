@@ -25,25 +25,28 @@ class KDE(object):
             If None is used, kernel sizes are automatically determined.
 
         """
-        self._data = data
-        self._n_kernels, self._n_features = self._data.shape
-        self._weights = weights if weights is not None else np.repeat(1. / self._n_kernels, self._n_kernels)
+        self.points = data
+        self.n_kernels, self.n_features = self.points.shape
+        self.weights = weights if weights is not None else np.repeat(1. / self.n_kernels, self.n_kernels)
 
         if bw is None:
+            # first attempt to find the optimal BW using Hall's method
+            # TODO: replace Hall's method with (newer) Improved Sheather-Jones method
+            #       see DOI 10.1080/10485250903194003
             try:
                 with np.errstate(all='raise'):
-                    bw = self._ksizeHall(self._data)
+                    bw = self._ksizeHall(self.points)
             except:
                 bw = np.array([np.nan])
-            # do multivariate Rule of Thumb if BW is unusable
+            # do multivariate Rule of Thumb if Hall's BW is unusable
             if np.isnan(bw).any() or np.isinf(bw).any():
-                bw = self._ksizeROT(self._data)
+                bw = self._ksizeROT(self.points)
 
         # replace any zero widths with a small value
-        self._bw = bw + (bw == 0.)*0.001
+        self.bw = bw + (bw == 0.) * 0.001
 
-        var_vector = ''.join(['c'] * self._n_features)
-        self._kde = sm.nonparametric.KDEMultivariate(self._data, var_vector, bw=self._bw)
+        var_vector = ''.join(['c'] * self.n_features)
+        self._kde = sm.nonparametric.KDEMultivariate(self.points, var_vector, bw=self.bw)
 
     def sample(self, n_samples):
         """
@@ -59,26 +62,26 @@ class KDE(object):
         ndarray
             A numpy matrix containing samples, of size (n_samples, n_features)
         """
-        bw = np.tile(self._bw, (self._n_kernels, 1))
-        points = np.zeros((n_samples, self._n_features))
-        randnums = np.random.normal(size=(n_samples, self._n_features))
+        bw = np.tile(self.bw, (self.n_kernels, 1))
+        points = np.zeros((n_samples, self.n_features))
+        randnums = np.random.normal(size=(n_samples, self.n_features))
 
         # weights and thresholds to determine which kernel to sample from
-        w = np.cumsum(self._weights)
+        w = np.cumsum(self.weights)
         w /= np.amax(w)  # kernel weights represented as normalized cumsum
         t = list(np.sort(np.random.uniform(size=(n_samples,))).tolist())
         t.append(1.)     # final threshold value signals sampling is done
 
         ii = 1
-        for i in range(self._n_kernels):
+        for i in range(self.n_kernels):
             # if kernel weight is less than threshold, go to next kernel
             # otherwise, continue sampling from current kernel
             while w[i] > t[ii]:
-                points[ii, :] = self._data[i, :] + (bw[i, :] * randnums[ii, :])
+                points[ii, :] = self.points[i, :] + (bw[i, :] * randnums[ii, :])
                 ii += 1
         # verify samples are correctly shaped before returning samples
         assert(points.shape[0] == n_samples)
-        assert(points.shape[1] == self._data.shape[1])
+        assert(points.shape[1] == self.points.shape[1])
         return points
 
     def predict(self, data):
@@ -108,12 +111,13 @@ class KDE(object):
         ----------
         data : ndarray
             Data samples to use for estimation, of shape (n_samples, n_features)
-            If None is used, the samples and weights used to fit the KDE is used.
+            If None is used, the samples and weights used to fit the KDE are used.
 
         Returns
         -------
         float
-            Entropy estimate
+            Entropy estimate based on the mean log-likelihood
+
         """
         if data is not None:
             probs = self.predict(data)
@@ -122,12 +126,12 @@ class KDE(object):
             else:
                 return -np.mean(np.log(probs))
         else:
-            probs = self.predict(self._data)
-            if np.any(self._weights[probs <= 0.]):
+            probs = self.predict(self.points)
+            if np.any(self.weights[probs <= 0.]):
                 return -np.inf
             else:
                 probs[probs == 0.] = 1.
-                return -np.dot(np.log(probs), np.transpose(self._weights))
+                return -np.dot(np.log(probs), np.transpose(self.weights))
 
     @staticmethod
     def _ksizeROT(X):
@@ -166,6 +170,8 @@ class KDE(object):
         """
         Find optimal kernel bandwidth using the "plug-in" method described by Hall et. al.
 
+        The method will fail to find valid bandwidths when the variance between samples is zero.
+        The caller needs to handle these scenarios.
         Method details can be found in DOI: 10.2307/2337251
 
         Parameters

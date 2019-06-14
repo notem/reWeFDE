@@ -43,7 +43,7 @@ def main(leakage_files):
     # read independent leakage information from files
     leakages = []
     for path, _ in leakage_files:
-        with open(path, 'r') as fi:
+        with open(path, 'rb') as fi:
             leakages.append(dill.load(fi))
 
     zipped_leakages = list(zip(*leakages))
@@ -66,7 +66,7 @@ def main(leakage_files):
         for j in range(len(leakage_files)):
             x = range(indices[0], indices[1]+1)
             slice = zipped_leakages[indices[0]-1: indices[1]]
-            y = zip(*slice)[j]
+            y = list(zip(*slice))[j]
             assert(len(x) == len(y))
             ax.plot(x, y, color=COLORS[j])
 
@@ -74,14 +74,14 @@ def main(leakage_files):
              ha='center', va='center', rotation='vertical', fontsize=16, fontweight='bold')
     fig.text(0.5, 0.03, 'Feature Category',
              ha='center', va='center', fontsize=16, fontweight='bold')
-    plt.figlegend(labels=list(zip(*leakage_files))[1], loc='upper center')
+    plt.figlegend(labels=list(zip(*leakage_files))[1], loc='upper center', ncol=2)
     plt.show()
 
 
 if __name__ == "__main__":
     try:
         args = parse_args()
-        file_name_tuples = zip(args.file, args.name)
+        file_name_tuples = list(zip(args.file, args.name))
         main(file_name_tuples)
     except KeyboardInterrupt:
         sys.exit(-1)

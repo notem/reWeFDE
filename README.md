@@ -1,6 +1,6 @@
-If you use this project in your paper, please include the following as citations:
+If you use this project in your paper, please include the following papers as citations:
 
-> Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI: https://doi.org/10.1145/3243734.3243832
+> Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI:10.1145/3243734.3243832
 
 and
 
@@ -19,28 +19,16 @@ All credit for the design of this system goes to Shuai et. al. [1].
 
 #### Requirements
 
-* Base Matlab install (tested w/ 2018+)
-* Python 2.70 & ``requirements.txt`` modules
-* Compatible C++ compiler
+* Python 3.6+ & ``requirements.txt`` modules
 
 #### Roadmap
 
 * [Completed] Closed-world information leakage analysis
+* [Completed] Replace Matlab @kde library with native Python implementation
 * Open-world analysis extension
 * Bootstrapping results verification
 * Re-write feature processing scripts to be extendable with additional features
-* Replace Matlab @kde library with native Python implementation
 
-#### Setup
-Install required python modules:
-```bash
-pip install -r requirements.txt
-```
-
-Compile and install required Matlab @kde library:
-```bash
-matlab -nodisplay -nosplash -nodesktop -r "try, run('./info_leakage/matlab/@kde/mex/makemex.m'), catch me, fprintf('%s / %s\n',me.identifier,me.message), end, exit"
-```
 #### Organization
 
 ###### Data processing
@@ -63,22 +51,41 @@ These feature files will be loaded during the information leakage analysis.
 ## Usage Examples
 
 ```bash
-TRACE_PATH=/path/to/traces
-FEATURE_PATH=/path/to/features
-LEAKAGE_PATH=/path/to/leakage
+TRACE_PATH="/path/to/traces"
+FEATURE_PATH="/path/to/features"
+LEAKAGE_PATH="/path/to/leakage"
 ```
 
 ###### Data processing
 
 ```bash
-python preprocess/extract.py --traces ${TRACE_PATH} --output ${FEATURE_PATH}
+python preprocess/extract.py --traces "${TRACE_PATH}" --output "${FEATURE_PATH}"
 ```
 
 ###### Information leakage analysis
 
 ```bash
-python info_leakage/info_leak.py --features ${FEATURE_PATH} --output ${LEAKAGE_PATH} \
-                                 --n_samples 5000 --nmi_threshold 0.9 --topn 100 --n_procs 8
+python analysis/info_leak.py --features "${FEATURE_PATH}" --output "${LEAKAGE_PATH}" \
+                             --n_samples 5000 --nmi_threshold 0.9 --topn 100 --n_procs 8
+```
+
+###### Graphing
+
+```bash
+python graphing/leakage.py --file "${LEAKAGE_PATH}\indiv.pkl" --name Undefended
+```
+
+```bash
+python graphing/cluster.py --cluster_file "${LEAKAGE_PATH}\cluster.pkl" \
+                           --redundant_file "${LEAKAGE_PATH}\redundant.pkl" \
+                           --style "horizontal"
+```
+
+###### Random Forests Benchmark
+
+```bash
+python classifier/rf.py --features "${FEATURE_PATH}" --output "./benchmark.txt" \
+                        --train 0.8
 ```
 
 ## References

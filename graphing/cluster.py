@@ -46,10 +46,10 @@ def main(cluster_file, redundant_file=None, style='horizontal'):
 
     """
 
-    with open(cluster_file, 'r') as fi:
+    with open(cluster_file, 'rb') as fi:
         clusters = list(dill.load(fi))
     if redundant_file:
-        with open(redundant_file, 'r') as fi:
+        with open(redundant_file, 'rb') as fi:
             redundant = list(dill.load(fi))
 
     # clusters with only one feature are 'noise'
