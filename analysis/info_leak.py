@@ -119,11 +119,11 @@ def _individual_measure(modeler, pool, checkpoint):
     # measure information leakage
     # log current progress at twenty intervals
     for leakage in proc_results:
-        leakage_indiv.append(leakage)
+        leakage_indiv.append(leakage[0])
         if len(leakage_indiv)-1 % int(size*0.05) == 0:
             logger.info("Progress: {}/{}".format(len(leakage_indiv), size))
         if checkpoint:
-            tmp_file.write('{}\n'.format(str(leakage)))
+            tmp_file.write('{}\n'.format(str(leakage[0])))
             tmp_file.flush()
     logger.info("Progress: Done.")
     if pool is not None:

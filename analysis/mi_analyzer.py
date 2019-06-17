@@ -221,7 +221,7 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint_fi = open(checkpoint, 'r')
+            checkpoint_fi = open(checkpoint, 'w+')
             for line in checkpoint_fi:
                 try:
                     if line[0] == '+':
@@ -334,7 +334,7 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, read NMI calculations and save to cache
         if checkpoint is not None:
-            chk_fi = open(checkpoint, 'r')
+            chk_fi = open(checkpoint, 'w+')
             for line in chk_fi:
                 try:
                     if line[0] == '=':
