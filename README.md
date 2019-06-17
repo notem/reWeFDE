@@ -15,13 +15,14 @@ Performing an website fingerprinting information leakage analysis should not req
 
 All credit for the design of this system goes to Shuai et. al. [1].
 
+
 ## Project Overview
 
-#### Requirements
+### Requirements
 
 * Python 3.6+ & ``requirements.txt`` modules
 
-#### Roadmap
+### Roadmap
 
 * [Completed] Closed-world information leakage analysis
 * [Completed] Replace Matlab @kde library with native Python implementation
@@ -29,9 +30,7 @@ All credit for the design of this system goes to Shuai et. al. [1].
 * Bootstrapping results verification
 * Re-write feature processing scripts to be extendable with additional features
 
-![Information leakage of individual features in a 100 site world size.](leakage.png)
-
-#### Organization
+### Organization
 
 ###### Data processing
 Before information leakage analysis can be performed on a dataset, that dataset must first be transformed to it's feature representation.
@@ -46,9 +45,35 @@ These feature files will be loaded during the information leakage analysis.
 
 ###### Information leakage analysis
 
+The design of WeFDE can be organized into two components: the **fingerprint modeler** and the **mutual information analyzer**.
+The fingerprint modeler constructs kernel density estimators using feature distributions. These estimators are then used to approximate the entropy and information leakage of the features for the dataset. 
+The mutual information analyzer is instead responsible for reducing the number of features to be analyzed to only the most important, non-redundant features. It does this via two methods: redundant feature pruning and related feature clustering.
+For further details as to the theory behind WeFDE, please read [1].
+
+The main experiment of WeFDE---estimating information leakage for individual and grouped features--is performed by the ``info_leak.py`` script. This script uses the ``fingerprint_modeler.py`` and ``mi_analyzer.py`` components to perform both the individual and combined leakage analysis. This script uses the functions from the ``data_utils.py`` script to load preprocessed feature files from the directory described by the ``--features`` argument. 
+
+The ``info_leak.py`` script saves analysis results in a directory described by the ``--output`` argument. The analysis is performed in two phases: 1) individual feature analysis and 2) combined feature analysis. Each phase saves its results in various files. 
+
+The individual feature analysis phase produces the ``indiv.pkl`` and ``indiv_checkpoint.txt`` files. The ``indiv.pkl`` is a python pickle file which contain a numpy array describing the information leakage results for each feature as they appear in your feature files. The ``indiv_checkpoint.txt`` contains the same information, but in an ascii form. This file is additionally used by the application to resume from a partially finished analysis.
+
+The combined feature analysis phase uses the results from the individual feature analysis to identify important features and group them a combined analysis. This phase produces the ``cleaned.pkl``, ``redundant.pkl``, ``cluster.pkl``, ``distance_matrix.pkl``, and ``prune_checkpoint.txt`` files. The ``cleaned.pkl`` and ``redundant.pkl`` contain the lists of the top features that were identified as non-redundant and redundant (respectively). The ``cluster.pkl`` contains the list of feature clusters identified from the cleaned features list, while the ``distance_matrix.pkl`` contains a 2D numpy array describing the distances between each feature. The ``prune_checkpoint.txt`` contains an ascii representation of the information contained by ``cleaned.pkl``, ``redundant.pkl``, and ``distance_matrix.pkl``; and is used to resume from prior analysis sessions.
+
+The final combined feature leakage value is printed to stdout via the logging utility after the analysis completes. So, be sure to save this information before closing the window in which your session was run. 
 
 ###### Results presentation
-###### Further analysis
+
+We have prepared two scripts to visualize the individual leakage and clustering results. The ``leakage.py`` and ``cluster.py`` scripts can be found in the ``graphing`` directory. These scripts use the ``matplotlib`` library to display the leakage and clustering information as a line and bar graph. 
+
+The ``leakage.py`` script can be fed several ``indiv.pkl`` files to plot the individual feature leakage for each feature category over several experiments. The script accepts several ``--file`` and ``--name`` arguments which identify the leakage files and the experiment name under which to plot them. If you have used a custom set of features for your analysis, you will need to adjust the feature category information contained in the ``common.py`` file. 
+
+The ``cluster.py`` script should be provided with a ``cluster.pkl`` and (optionally) a ``redundant.pkl`` file. The information contained in these files are plotted as stacked bar graphs in which each color slice represents the proportion of that feature category belongs to a particular cluster. 
+
+In addition, a simple Random Forests classifier is available in the ``classifier`` directory. The ``rf.py`` script peforms a basic closed-world attack on the dataset using the same processed features as the information leakage analysis. This may be used as a benchmark to compare plain accuracy to the information leakage results.
+
+## Results
+
+![Information leakage of individual features in a 100 site world size.](leakage.png)
+
 
 ## Usage Examples
 
