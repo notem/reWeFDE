@@ -1,3 +1,4 @@
+## Notice
 If you use this project in your paper, please include the following papers as citations:
 
 > Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI:10.1145/3243734.3243832
@@ -32,7 +33,7 @@ All credit for the design of this system goes to Shuai et. al. [1].
 
 ### Organization
 
-###### Data processing
+#### Data processing
 Before information leakage analysis can be performed on a dataset, that dataset must first be transformed to it's feature representation.
 This process is handled by the scripts in the ``preprocess`` directory.
 At present, this code is a revised variant of the processing scripts seen in the Shuai et. al. public code [2].
@@ -43,7 +44,7 @@ Each website trace is saved as a CSV-type file using a space delimiter.
 The name given to each transformed trace is the original trace name with ``.feature`` prepended.
 These feature files will be loaded during the information leakage analysis.
 
-###### Information leakage analysis
+#### Information leakage analysis
 
 The design of WeFDE can be organized into two components: the **fingerprint modeler** and the **mutual information analyzer**.
 The fingerprint modeler constructs kernel density estimators using feature distributions. These estimators are then used to approximate the entropy and information leakage of the features for the dataset. 
@@ -60,7 +61,7 @@ The combined feature analysis phase uses the results from the individual feature
 
 The final combined feature leakage value is printed to stdout via the logging utility after the analysis completes. So, be sure to save this information before closing the window in which your session was run. 
 
-###### Results presentation
+#### Results presentation
 
 We have prepared two scripts to visualize the individual leakage and clustering results. The ``leakage.py`` and ``cluster.py`` scripts can be found in the ``graphing`` directory. These scripts use the ``matplotlib`` library to display the leakage and clustering information as a line and bar graph. 
 
