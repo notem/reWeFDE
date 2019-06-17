@@ -9,7 +9,7 @@ from common import FEATURE_CATEGORIES, COLORS
 plt.rcParams["font.family"] = "serif"
 
 # define subplot grid dimensions
-ROWS = 2
+ROWS = 3
 COLS = math.ceil(float(len(FEATURE_CATEGORIES)) / ROWS)
 
 

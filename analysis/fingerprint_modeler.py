@@ -186,7 +186,6 @@ class WebsiteFingerprintModeler(object):
 
         # map clusters to probability predictions for random samples
         # allows for KDE construction, sampling, and prediction to be done in parallel (if enabled)
-        logger.info("Generating prediction matrices for clusters...")
         if self._pool is None:
             results = map(self._do_predictions, clusters)
         else:
@@ -201,7 +200,6 @@ class WebsiteFingerprintModeler(object):
             count = len(cluster_probs)
             if count-1 % (len(clusters)*0.05) == 0:
                 logger.info("Progress: {}/{}".format(count, len(clusters)))
-        logger.info("Progress: Done.")
 
         # restart pool if multiprocessing
         if self._pool is not None:
@@ -233,7 +231,7 @@ class WebsiteFingerprintModeler(object):
             # (as should be expected for conditional probabilities)
             probs_norm = []
             for probs in probs_weighted:
-                norm = probs / sum(probs)
+                norm = probs / sum(probs) if sum(probs) > 0 else probs
                 probs_norm.append(norm)
 
             # compute entropy for each sample

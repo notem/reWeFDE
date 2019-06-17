@@ -347,7 +347,6 @@ class MutualInformationAnalyzer(object):
             chk_fi = open(checkpoint, 'a')
 
         if self._nmi_cache:
-            logger.info("Load NMI estimates from cache.")
             # ignore unselected features in cache
             cache = [(pair, nmi) for pair, nmi in self._nmi_cache if pair[0] in features and pair[1] in features]
             # add each cached nmi to the distance matrix
@@ -370,7 +369,6 @@ class MutualInformationAnalyzer(object):
                 self._pool.close()
 
             # fill matrix with pair nmi values
-            logger.info("Filling distances matrix...")
             count = 0
             for pair, nmi in zip(pairs, results):
 
@@ -387,7 +385,6 @@ class MutualInformationAnalyzer(object):
                 if checkpoint is not None:
                     chk_fi.write('={},{},{}\n'.format(fidx1, fidx2, nmi))
                     chk_fi.flush()
-            logger.info("Progress: Done.")
 
         # restart pool if multiprocessing
         if self._pool is not None:
