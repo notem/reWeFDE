@@ -29,7 +29,6 @@ All credit for the design of this system goes to Shuai et. al. [1].
 * Bootstrapping results verification
 * Re-write feature processing scripts to be extendable with additional features
 
-Inline-style: 
 ![Information leakage of individual features in a 100 site world size.](leakage.png)
 
 #### Organization
