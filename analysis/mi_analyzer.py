@@ -221,7 +221,7 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint_fi = open(checkpoint, 'w+')
+            checkpoint_fi = open(checkpoint, 'r+')
             for line in checkpoint_fi:
                 try:
                     if line[0] == '+':
@@ -239,7 +239,7 @@ class MutualInformationAnalyzer(object):
             checkpoint_fi.close()
 
             # re-open checkpoint for appending
-            checkpoint = open(checkpoint, 'a')
+            checkpoint = open(checkpoint, 'a+')
 
         # continue to process features until either there are no features left to process
         # or the topN features have been selected
@@ -327,14 +327,16 @@ class MutualInformationAnalyzer(object):
             Nested lists where each list contains the cluster's features.
             Features that do not fall into a cluster are given their own cluster (ie. singular list).
         """
+        print(features)
 
         # compute pairwise MI for all topN features
-        X = np.zeros(shape=(len(features), len(features)), dtype=float)  # distance matrix
+        X = np.empty(shape=(len(features), len(features)), dtype=float)  # distance matrix
         pairs = list(combinations_with_replacement(features, 2))         # all possible combinations
+        print(len(pairs))
 
         # if checkpointing, read NMI calculations and save to cache
         if checkpoint is not None:
-            chk_fi = open(checkpoint, 'w+')
+            chk_fi = open(checkpoint, 'r+')
             for line in chk_fi:
                 try:
                     if line[0] == '=':
@@ -344,7 +346,7 @@ class MutualInformationAnalyzer(object):
                     pass
             chk_fi.close()
             # re-open checkpoint for appending
-            chk_fi = open(checkpoint, 'a')
+            chk_fi = open(checkpoint, 'a+')
 
         if self._nmi_cache:
             # ignore unselected features in cache
@@ -354,7 +356,6 @@ class MutualInformationAnalyzer(object):
                 # remove cached_pair from pairs
                 pairs = list(filter(lambda pair: (pair[0] != cached_pair[0] and pair[1] != cached_pair[1]) and
                                                  (pair[0] != cached_pair[1] and pair[1] != cached_pair[0]), pairs))
-                print(len(pairs))
                 # add cached nmi to matrix
                 i, j = features.index(cached_pair[0]), features.index(cached_pair[1])
                 X[i][j] = 1 - nmi
@@ -386,10 +387,13 @@ class MutualInformationAnalyzer(object):
                     chk_fi.write('={},{},{}\n'.format(fidx1, fidx2, nmi))
                     chk_fi.flush()
 
-        # restart pool if multiprocessing
-        if self._pool is not None:
-            self._pool.join()
-            self._pool.restart()
+            # restart pool if multiprocessing
+            if self._pool is not None:
+                self._pool.join()
+                self._pool.restart()
+
+        # verify that all values are filled
+        assert not np.any(X[X == np.nan])
 
         # use DBSCAN to cluster our data
         labels = DBSCAN(eps=eps, metric='precomputed').fit_predict(X)
