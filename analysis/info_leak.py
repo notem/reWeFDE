@@ -97,10 +97,11 @@ def _individual_measure(modeler, pool, checkpoint):
 
     # open a checkpoint file
     if checkpoint:
-        with open(checkpoint, 'r+') as tmp_file:
-            past_leaks = [float(line) for line in tmp_file]
-            lines = len(past_leaks)
-            leakage_indiv = past_leaks
+        if os.path.exists(checkpoint):
+            with open(checkpoint, 'r') as tmp_file:
+                past_leaks = [float(line) for line in tmp_file]
+                lines = len(past_leaks)
+                leakage_indiv = past_leaks
         tmp_file = open(checkpoint, 'a+')
 
     # if a pool has been provided, perform computation in parallel
