@@ -70,10 +70,9 @@ class WebsiteData(object):
     """
     Object-wrapper to conveniently manage dataset
     """
-    def __init__(self, X, Y):
-        self._X = X
-        self._Y = Y
-        self.features = list(range(X.shape[1]))
+    def __init__(self, directory, **kwargs):
+        self._X, self._Y = load_data(directory, **kwargs)
+        self.features = list(range(self._X.shape[1]))
         self.sites = list(range(len(np.unique(self._Y))))
 
     def __len__(self):
@@ -136,7 +135,7 @@ class WebsiteData(object):
 
 
 def load_data(directory, extension='.features', delimiter=' ', split_at='-',
-              max_classes=99999, max_instances=99999, pack_dataset=True):
+              max_classes=99999, min_instances=100, max_instances=99999, pack_dataset=True):
     """
     Load feature files from a directory.
 
@@ -154,6 +153,9 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-',
         Instance number is ignored.
     max_classes : int
         Maximum number of classes to load.
+    max_instances : int
+        Minimum number of instances acceptable per class.
+        If a class has less than this number of instances, the all instances of the class are discarded.
     max_instances : int
         Maximum number of instances to load per class.
     pack_dataset : bool
@@ -221,6 +223,15 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-',
                     X.extend(features)
                     Y.extend([int(cls)-1 for _ in range(len(features))])
                     class_counter[int(cls)] = class_counter.get(int(cls), 0) + len(features)
+
+        # trim data to minimum instance count
+        counts = {y: Y.count(y) for y in set(Y)}
+        new_X, new_Y = [], []
+        for x, y in zip(X, Y):
+            if counts[y] >= min_instances:
+                new_Y.append(y)
+                new_X.append(x)
+        X, Y = new_X, new_Y
 
         # adjust labels such that they are assigned a number from 0..N
         # (required when labels are non-numerical or does not start at 0)

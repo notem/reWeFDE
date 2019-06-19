@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+import os
 from itertools import repeat, combinations_with_replacement
 from data_utils import logger
 from sklearn.cluster import DBSCAN
@@ -221,22 +222,23 @@ class MutualInformationAnalyzer(object):
 
         # if checkpointing, open file and read any previously processed features
         if checkpoint is not None:
-            checkpoint_fi = open(checkpoint, 'r+')
-            for line in checkpoint_fi:
-                try:
-                    if line[0] == '+':
-                        feature = int(line[1:].strip())
-                        cleaned_features.add(feature)
-                    elif line[0] == '-':
-                        feature = int(line[1:].strip())
-                        pruned_features.add(feature)
-                    if line[0] == '=':
-                        a, b, c = line[1:].split(',')
-                        self._nmi_cache.append(((int(a), int(b)), float(c)))
-                except:
-                    pass
-            features = list(filter(lambda f: f not in cleaned_features and f not in pruned_features, features))
-            checkpoint_fi.close()
+            if os.path.exists(checkpoint):
+                checkpoint_fi = open(checkpoint, 'r+')
+                for line in checkpoint_fi:
+                    try:
+                        if line[0] == '+':
+                            feature = int(line[1:].strip())
+                            cleaned_features.add(feature)
+                        elif line[0] == '-':
+                            feature = int(line[1:].strip())
+                            pruned_features.add(feature)
+                        if line[0] == '=':
+                            a, b, c = line[1:].split(',')
+                            self._nmi_cache.append(((int(a), int(b)), float(c)))
+                    except:
+                        pass
+                features = list(filter(lambda f: f not in cleaned_features and f not in pruned_features, features))
+                checkpoint_fi.close()
 
             # re-open checkpoint for appending
             checkpoint = open(checkpoint, 'a+')
@@ -292,7 +294,6 @@ class MutualInformationAnalyzer(object):
                 if checkpoint is not None:
                     checkpoint.write('-{}\n'.format(current_feature))
                     checkpoint.flush()
-        logger.info("Progress: Done.")
 
         if checkpoint is not None:
             checkpoint.close()
@@ -327,24 +328,22 @@ class MutualInformationAnalyzer(object):
             Nested lists where each list contains the cluster's features.
             Features that do not fall into a cluster are given their own cluster (ie. singular list).
         """
-        print(features)
-
         # compute pairwise MI for all topN features
         X = np.empty(shape=(len(features), len(features)), dtype=float)  # distance matrix
         pairs = list(combinations_with_replacement(features, 2))         # all possible combinations
-        print(len(pairs))
 
         # if checkpointing, read NMI calculations and save to cache
         if checkpoint is not None:
-            chk_fi = open(checkpoint, 'r+')
-            for line in chk_fi:
-                try:
-                    if line[0] == '=':
-                        a, b, c = line[1:].split(',')
-                        self._nmi_cache.append(((int(a), int(b)), float(c)))
-                except:
-                    pass
-            chk_fi.close()
+            if os.path.exists(checkpoint):
+                chk_fi = open(checkpoint, 'r+')
+                for line in chk_fi:
+                    try:
+                        if line[0] == '=':
+                            a, b, c = line[1:].split(',')
+                            self._nmi_cache.append(((int(a), int(b)), float(c)))
+                    except:
+                        pass
+                chk_fi.close()
             # re-open checkpoint for appending
             chk_fi = open(checkpoint, 'a+')
 

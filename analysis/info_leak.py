@@ -162,8 +162,7 @@ def main(features_path, output_path, n_procs=0, n_samples=5000, topn=100, nmi_th
     """
     # prepare feature dataset
     logger.info("Loading dataset.")
-    X, Y = load_data(features_path)
-    feature_data = WebsiteData(X, Y)
+    feature_data = WebsiteData(features_path)
     logger.info("Loaded {} sites.".format(len(feature_data.sites)))
     logger.info("Loaded {} instances.".format(len(feature_data)))
 
@@ -193,12 +192,6 @@ def main(features_path, output_path, n_procs=0, n_samples=5000, topn=100, nmi_th
     # otherwise do individual measure
     else:
         logger.info("Begin individual feature analysis.")
-
-        # perform analysis without checkpointing
-        #features = [[f] for f in feature_data.features]
-        #leakage_indiv = modeler.information_leakage(clusters=features,
-        #                                            sample_size=n_samples,
-        #                                            joint_leakage=False)
 
         # perform individual measure with checkpointing
         chk_path = os.path.join(outdir, 'indiv_checkpoint.txt')
