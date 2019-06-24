@@ -45,7 +45,6 @@ def main(cluster_file, redundant_file=None, style='horizontal'):
         the bar graph style (ie. horizontal or vertical bars)
 
     """
-
     with open(cluster_file, 'rb') as fi:
         clusters = list(dill.load(fi))
     if redundant_file:

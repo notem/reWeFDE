@@ -135,7 +135,7 @@ class WebsiteData(object):
 
 
 def load_data(directory, extension='.features', delimiter=' ', split_at='-',
-              max_classes=99999, min_instances=100, max_instances=99999, pack_dataset=True):
+              max_classes=99999, min_instances=100, max_instances=500, pack_dataset=True):
     """
     Load feature files from a directory.
 
@@ -245,9 +245,15 @@ def load_data(directory, extension='.features', delimiter=' ', split_at='-',
 
         # save dataset to pickle file for quicker future loading
         if pack_dataset:
-            X, Y = np.array(X), np.array(Y)
-            with open(feat_pkl, "wb") as fi:
-                dill.dump((X, Y), fi)
+            try:
+                X, Y = np.array(X), np.array(Y)
+                with open(feat_pkl, "wb") as fi:
+                    dill.dump((X, Y), fi)
+            except:
+                try:
+                    os.remove(feat_pkl)
+                except:
+                    pass
 
     # return X and Y as numpy arrays
     return X, Y

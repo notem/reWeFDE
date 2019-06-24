@@ -4,3 +4,4 @@ scipy
 sklearn
 pathos
 matplotlib
+hdbscan

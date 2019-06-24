@@ -3,7 +3,8 @@ import numpy as np
 import os
 from itertools import repeat, combinations_with_replacement
 from data_utils import logger
-from sklearn.cluster import DBSCAN
+#from sklearn.cluster import DBSCAN
+from hdbscan import HDBSCAN
 from kde_wrapper import KDE
 from collections import Iterable
 from scipy import stats
@@ -302,7 +303,7 @@ class MutualInformationAnalyzer(object):
         # which feature was redundant with which is however not saved
         return list(cleaned_features), list(pruned_features)
 
-    def cluster(self, features, checkpoint=None, eps=0.4):
+    def cluster(self, features, checkpoint=None, min_samples=1, min_cluster_size=3):
         """
         Find clusters in provided features.
 
@@ -318,9 +319,13 @@ class MutualInformationAnalyzer(object):
         checkpoint : str
             Path to plaintext file to store feature redundancy checkpoint information.
             Do not perform checkpointing if None is used.
-        eps : float
-            Threshold value for DBCluster clustering.
-            Features with values above this threshold will form clusters.
+        min_samples : int
+            The min_samples parameter to use for the HDBSCAN algorithm.
+            The number of samples in a neighbourhood for a point to be considered a core point.
+
+        min_cluster_size : int
+            The min_cluster_size parameter to use for the HDBSCAN algorithm.
+            The minimum size of clusters; single linkage splits that contain fewer points than this will be considered points “falling out” of a cluster rather than a cluster splitting into two new clusters.
 
         Returns
         -------
@@ -395,7 +400,9 @@ class MutualInformationAnalyzer(object):
         assert not np.any(X[X == np.nan])
 
         # use DBSCAN to cluster our data
-        labels = DBSCAN(eps=eps, metric='precomputed').fit_predict(X)
+        labels = HDBSCAN(metric='precomputed',
+                         min_samples=min_samples,
+                         min_cluster_size=min_cluster_size).fit_predict(X)
         logger.debug("Found {} clusters.".format(set(labels)))
 
         # organize the topN features into sub-lists where

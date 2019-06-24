@@ -10,7 +10,7 @@ from pathos.multiprocessing import cpu_count
 from pathos.multiprocessing import ProcessPool as Pool
 from fingerprint_modeler import WebsiteFingerprintModeler
 from mi_analyzer import MutualInformationAnalyzer
-from data_utils import load_data, WebsiteData, logger
+from data_utils import WebsiteData, logger
 
 
 def parse_args():
@@ -106,7 +106,7 @@ def _individual_measure(modeler, pool, checkpoint):
 
     # if a pool has been provided, perform computation in parallel
     # otherwise do serial computation
-    if checkpoint:
+    if checkpoint and os.path.exists(checkpoint):
         features = modeler.data.features[lines:]
     else:
         features = modeler.data.features
