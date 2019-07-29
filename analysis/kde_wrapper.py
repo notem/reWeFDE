@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from data_utils import logger
 import numpy as np
 from scipy import stats
 import statsmodels.api as sm
@@ -6,7 +7,7 @@ import statsmodels.api as sm
 
 class KDE(object):
 
-    def __init__(self, data, weights=None, bw=None):
+    def __init__(self, data, weights=None, bw=None, discrete_threshold=10000000000):
         """
         Setup and fit a kernel density estimator to data.
 
@@ -21,7 +22,7 @@ class KDE(object):
             The summation of all weights should equal to 1.
             If None is used, all samples are weighted equally.
         bw : ndarray
-            The bandwidth vector to use. Array should be of shape (n_features, 1)
+            The bandwidth vector to use. Array should be of shape (n_features, n_kernels)
             If None is used, kernel sizes are automatically determined.
 
         """
@@ -30,22 +31,50 @@ class KDE(object):
         self.weights = weights if weights is not None else np.repeat(1. / self.n_kernels, self.n_kernels)
 
         if bw is None:
-            # first attempt to find the optimal BW using Hall's method
-            # TODO: replace Hall's method with (newer) Improved Sheather-Jones method
-            #       see DOI 10.1080/10485250903194003
-            try:
-                with np.errstate(all='raise'):
-                    bw = self._ksizeHall(self.points)
-            except:
-                bw = np.array([np.nan])
-            # do multivariate Rule of Thumb if Hall's BW is unusable
-            if np.isnan(bw).any() or np.isinf(bw).any():
-                bw = self._ksizeROT(self.points)
+
+            # create empty bandwidth array
+            bw = np.empty((self.n_features, self.n_kernels))
+            bw[:] = np.nan
+
+            # identify discrete samples
+            disc_vec = self._identify_discrete(data, discrete_threshold)
+
+            # set discrete sample bandwidths to a small value
+            if np.any(disc_vec == 1):
+                bw[:, disc_vec == 1] = 0.001
+
+            # generate optimal continuous bandwidths
+            if np.any(disc_vec == 0):
+                # first, attempt to find the optimal BW using Hall's method
+                # TODO: replace Hall's method with (newer) Improved Sheather-Jones method
+                try:
+                    with np.errstate(all='raise'):
+                        continuous_bw = self._ksizeHall(self.points[disc_vec == 0, :])
+                except:
+                    continuous_bw = np.array([np.nan])
+                # do multivariate Rule of Thumb if Hall's BW is unusable
+                if np.isnan(continuous_bw).any() or np.isinf(continuous_bw).any():
+                    continuous_bw = self._ksizeROT(self.points[disc_vec == 0, :])
+
+                # set continuous bandwidths in bw
+                for i in range(self.n_features):
+                    bw[i, disc_vec == 0] = continuous_bw[i]
+
+            self.bw = np.zeros((self.n_features,))
+            for i in range(self.n_features):
+                self.bw[i] = stats.mode(bw[i, :])[0]
+
+        else:
+            self.bw = bw
 
         # replace any zero widths with a small value
-        self.bw = bw + (bw == 0.) * 0.001
+        self.bw = self.bw + (self.bw == 0.) * 0.001
+        assert not np.any(self.bw <= 0)
 
+        # treat all features as continuous distributions
         var_vector = ''.join(['c'] * self.n_features)
+
+        # create the underlying KDE
         self._kde = sm.nonparametric.KDEMultivariate(self.points, var_vector, bw=self.bw)
 
     def sample(self, n_samples):
@@ -199,8 +228,7 @@ class KDE(object):
         dX = np.tile(t, (1, N2, 1))
     
         for i in range(N2):
-            dX[:, :, i] = np.divide(dX[:, :, i] - X,
-                                    BW)
+            dX[:, :, i] = np.divide(dX[:, :, i] - X, BW)
         for i in range(N2):
             dX[:, i, i] = 2e22
         dX = np.reshape(dX, (N1, N2*N2))
@@ -229,3 +257,45 @@ class KDE(object):
         h = h.real.astype(dtype=np.float64)
     
         return np.transpose(h)
+
+    def _identify_discrete(self, data, threshold):
+        """
+        Identify which data samples should be modeled as discrete-like for the purposes of setting kernel bandwidth.
+
+        Parameters
+        ----------
+            data : ndarray
+            threshold : int
+
+        Returns
+        -------
+        ndarray
+            Numpy array of zero and ones identifying samples as continuous or discrete
+        """
+        # recognize which data point is discrete or not
+        sampleNum, featureNum = data.shape
+        isDiscVec = np.empty((self.n_kernels,))
+        isDiscVec[:] = np.nan
+
+        for i in range(sampleNum):
+            # if i has been processed
+            if not np.isnan(isDiscVec[i]):
+                continue
+
+            equal_list = [i]
+            samplei = data[i, :]
+
+            # find following equal samples...
+            for j in range(sampleNum):
+                samplej = data[j, :]
+                if np.array_equal(samplei, samplej):
+                    equal_list.append(j)
+
+            # determine to be discrete or continuous
+            if len(equal_list) >= threshold:
+                # bigger than threshold: discrete
+                isDiscVec[equal_list] = 1
+            else:
+                # smaller than threshold: continuous
+                isDiscVec[equal_list] = 0
+        return isDiscVec

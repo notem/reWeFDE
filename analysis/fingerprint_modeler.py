@@ -8,7 +8,7 @@ import numpy as np
 
 class WebsiteFingerprintModeler(object):
 
-    def __init__(self, data, pool=None):
+    def __init__(self, data, pool=None, web_priors=None, discrete_threshold=10000):
         """
         Instantiate a fingerprint modeler.
 
@@ -20,8 +20,9 @@ class WebsiteFingerprintModeler(object):
         """
         self.sample_size = 1000
         self.data = data
-        self.website_priors = [1/float(len(self.data.sites)) for _ in self.data.sites]
+        self.website_priors = web_priors if web_priors else [1/float(len(self.data.sites)) for _ in self.data.sites]
         self._pool = pool
+        self.discrete_threshold = discrete_threshold
 
     def _make_kde(self, features, site=None):
         """
@@ -63,7 +64,7 @@ class WebsiteFingerprintModeler(object):
                 X = np.hstack((X, X_f))
 
         # fit KDE on X
-        return KDE(X)
+        return KDE(X, discrete_threshold=self.discrete_threshold)
 
     def _sample(self, mkdes, web_priors, sample_size):
         """
@@ -181,7 +182,7 @@ class WebsiteFingerprintModeler(object):
         # Shannon Entropy func: -p(x)*log2(p(x))
         h = lambda x: -x * math.log(x, 2)
 
-        # H(C) -- compute website entropy
+        # H(C) -- compute website entropy, this represents the maximum number of bits which can be leaked
         H_C = sum([h(prior) for prior in self.website_priors if prior > 0])
 
         # map clusters to probability predictions for random samples
@@ -192,7 +193,7 @@ class WebsiteFingerprintModeler(object):
             results = self._pool.imap(self._do_predictions, clusters)
             self._pool.close()
 
-        # load the results
+        # load the results as they are produced and log progress
         cluster_probs = []
         for probs in results:
             cluster_probs.append(probs)
@@ -208,17 +209,20 @@ class WebsiteFingerprintModeler(object):
 
         if joint_leakage:
             # multiply cluster probs to get joint probs for each sample
+            # clusters are assumed to be independent from one another
+            # in this way, the joint probability of all the variables is their products
             cluster_probs = np.array(cluster_probs)
-            prob_sets = [np.prod(cluster_probs, axis=0)]
+            prob_sets = [np.prod(cluster_probs, axis=0)]  # shape (1, n_sites, n_samples)
         else:
             # measure leakages for each cluster independently
-            prob_sets = cluster_probs
+            prob_sets = cluster_probs  # shape (n_clusters, n_sites, n_samples)
 
         # compute information leakage for each cluster (or combined cluster if joint)
         leakages = []
         for i, prob_set in enumerate(prob_sets):
 
             # weight the probability predictions by the website priors
+            # in the closed-world scenario, all are equally weighted
             probs_weighted = []
             for site, probs in enumerate(prob_set):
                 probs_weighted.append(probs * self.website_priors[site])

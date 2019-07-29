@@ -30,6 +30,11 @@ FEATURE_CATEGORIES = [
     ('Pkt. per Second', (2814, 2939)),
     ('CUMUL', (2940, 3043))
 ]
+
+# 5000-input DF features
+#FEATURE_CATEGORIES = [
+#    ('DF Features', (1, 5120))
+#]
 """
 Define names and ranges for feature categories.
 """

@@ -53,12 +53,12 @@ def slice_by_binsize(feature_values, bin_input):
     bin_for_all_instances = np.array(get_bin_sizes(feature_values, bin_input))
     d_new = {}
     for name, v in feature_values.iteritems():
-        d_new[name] = [[] for _ in xrange(bin_input)]
+        d_new[name] = [[] for _ in range(bin_input)]
 
         bin_indices = np.digitize(np.array(v),
                                   bin_for_all_instances[:bin_input],
                                   right=True)
-        for i in xrange(bin_indices.size):
+        for i in range(bin_indices.size):
             if bin_indices[i] > bin_input:
                 d_new[name][-1].append(v[i])
             elif bin_indices[i] == 0:
@@ -103,7 +103,7 @@ def final_format_by_class(feature_values, bin_input):
 def padding_neural(feature_values):
     directed_neural = feature_values
     max_length = max(len(elements) for elements in directed_neural.values())
-    print "Maximum Length", max_length
+    print("Maximum Length", max_length)
     for key, value in directed_neural.iteritems():
         if len(value) < max_length:
             zeroes_needed = max_length - len(value)
@@ -256,7 +256,7 @@ def main():
     }
 
     # Create bins for each feature, extract bin counts and normalize them
-    print ("Extracting Features...")
+    print("Extracting Features...")
 
     for feature in features:
         features[feature] = normalize_data(features[feature], feature_bins[feature])
@@ -265,7 +265,7 @@ def main():
 
     output_dir = args.output
 
-    print "Saving features..."
+    print("Saving features...")
     for label in labels_instances:
         data = old_timing_features[label]
         for feature in feature_names:
@@ -279,7 +279,7 @@ def main():
         for each_key, pos in newfp:
             fd.write(each_key + ':' + str(pos) + '\n')
 
-    print "Done"
+    print("Done")
 
 
 if __name__ == '__main__':

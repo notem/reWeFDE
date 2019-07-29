@@ -68,6 +68,10 @@ def parse_args():
                         default=0,
                         help="The number of processes to use when performing parallel operations. "
                              "Use '0' to use all available processors.")
+    parser.add_argument("--discrete_threshold",
+                        type=int,
+                        default=100000,
+                        help="The threshold to use for identifying discrete data samples.")
     return parser.parse_args()
 
 
@@ -97,6 +101,7 @@ def _individual_measure(modeler, pool, checkpoint):
 
     # open a checkpoint file
     if checkpoint:
+        lines = None
         if os.path.exists(checkpoint):
             with open(checkpoint, 'r') as tmp_file:
                 past_leaks = [float(line) for line in tmp_file]
@@ -106,7 +111,7 @@ def _individual_measure(modeler, pool, checkpoint):
 
     # if a pool has been provided, perform computation in parallel
     # otherwise do serial computation
-    if checkpoint and os.path.exists(checkpoint):
+    if checkpoint and lines:
         features = modeler.data.features[lines:]
     else:
         features = modeler.data.features
@@ -136,7 +141,7 @@ def _individual_measure(modeler, pool, checkpoint):
     return leakage_indiv
 
 
-def main(features_path, output_path, n_procs=0, n_samples=5000, topn=100, nmi_threshold=0.9):
+def main(features_path, output_path, n_procs=0, n_samples=5000, topn=100, nmi_threshold=0.9, discrete_threshold=100000):
     """
     Run the full information leakage analysis on a processed dataset.
 
@@ -181,7 +186,7 @@ def main(features_path, output_path, n_procs=0, n_samples=5000, topn=100, nmi_th
         os.makedirs(outdir)
 
     # initialize fingerprint modeler
-    modeler = WebsiteFingerprintModeler(feature_data)
+    modeler = WebsiteFingerprintModeler(feature_data, discrete_threshold=discrete_threshold)
 
     # load previous leakage measurements if possible
     indiv_path = os.path.join(outdir, 'indiv.pkl')
@@ -269,7 +274,8 @@ if __name__ == "__main__":
              n_procs=args.n_procs,
              n_samples=args.n_samples,
              topn=args.topn,
-             nmi_threshold=args.nmi_threshold)
+             nmi_threshold=args.nmi_threshold,
+             discrete_threshold=args.discrete_threshold)
     except KeyboardInterrupt:
         sys.exit(-1)
 

@@ -29,10 +29,20 @@ def load_data(directory, extension='.features', delimiter=' '):
             cls, ins = file.split("-")
             with open(os.path.join(root, file), "r") as csvFile:
                 features = [float(f) for f in list(csv.reader(csvFile, delimiter=delimiter))[0] if f]
+                features = features[:13] + features[37:2813] + features[2939:]  # remove time features
                 X.append(features)
                 Y.append(int(cls))
 
     return np.array(X), np.array(Y)
+
+
+def top_n_accuracy(preds, truths, n):
+    best_n = np.argsort(preds, axis=1)[:, -n:]
+    successes = 0
+    for i in range(truths.shape[0]):
+        if truths[i] in best_n[i, :]:
+            successes += 1
+    return float(successes)/truths.shape[0]
 
 
 def load_features(path_to_features, tr_split):
@@ -41,8 +51,10 @@ def load_features(path_to_features, tr_split):
     """
 
     # load features dataset
-    X, Y = load_data(path_to_features, ".features", " ")
+    #X_tr, Y_tr = load_data(os.path.join(path_to_features, 'train'), ".features", " ")
+    #X_ts, Y_ts = load_data(os.path.join(path_to_features, 'test'), ".features", " ")
 
+    X, Y = load_data(path_to_features, ".features", " ")
     # shuffle features
     s = np.arange(Y.shape[0])
     np.random.seed(SEED)
@@ -78,7 +90,11 @@ def classify(feature_directory, tr_split, out):
     # test performance
     #
     acc = model.score(X_ts, Y_ts)
-    print("RF accuracy = ", acc)
+    print("accuracy = ", acc)
+
+    pred = model.predict_proba(X_ts)
+    acc_2 = top_n_accuracy(pred, Y_ts, 2)
+    print("top_2 accuracy = ", acc_2)
 
     #
     # rank feature importance
@@ -97,16 +113,16 @@ def classify(feature_directory, tr_split, out):
     #
     # cross validation score
     #
-    scores = cross_val_score(model, np.array(X_tr), np.array(Y_tr))
-    print("cross_val_score = ", scores.mean())
-    print("OOB score = ", model.oob_score_)
+    #scores = cross_val_score(model, np.array(X_tr), np.array(Y_tr))
+    #print("cross_val_score = ", scores.mean())
+    #print("OOB score = ", model.oob_score_)
 
     if out:
         res = dict()
-        res['cross_val_score'] = scores.mean()
+        #res['cross_val_score'] = scores.mean()
         res['oob'] = model.oob_score_
         res['accuracy'] = acc
-        res['feature_rank'] = sorted_importance
+        #res['feature_rank'] = sorted_importance
         with open(out, "w") as fi:
             json.dump(res, fi, sort_keys=True, indent=4, separators=(',', ': '))
 
