@@ -1,11 +1,7 @@
 ## Notice
-If you use this project in your paper, please include the following papers as citations:
+If you use this project in your paper, please include the following paper(s) as citations:
 
 > Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI:10.1145/3243734.3243832
-
-and
-
-> Imani et. al. 2019. Mockingbird: Defending Against Deep-Learning-Based Website Fingerprinting Attacks with Adversarial Traces. arXiv:1902.06626
 
 ## Introduction
 
