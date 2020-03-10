@@ -1,6 +1,6 @@
 ## Notice
 
-This is a ***re-implementation*** of WeFDE [1] framework to measure information leakage for the paper ***Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks*** accepted in **Privacy Enhancing Technologies Symposium (PETS) 2020**.
+This is a ***re-implementation*** of WeFDE [1] framework to measure information leakage for the paper ***Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks*** [2] accepted in **Privacy Enhancing Technologies Symposium (PETS) 2020**.
 
 If you use this implementation in your paper, please include the following papers as citations:
 
@@ -44,10 +44,10 @@ All credit for the design of this system goes to Shuai et. al. [1].
 #### Data processing
 Before information leakage analysis can be performed on a dataset, that dataset must first be transformed to it's feature representation.
 This process is handled by the scripts in the ``preprocess`` directory.
-At present, this code is a revised variant of the processing scripts seen in the Shuai et. al. public code [2].
+At present, this code is a revised variant of the processing scripts seen in the Shuai et. al. public code [3].
 
 The main script processes all files in a nested directory.
-Trace files should follow the format defined by Wang et. al. in [3].
+Trace files should follow the format defined by Wang et. al. in [4].
 Each website trace is saved as a CSV-type file using a space delimiter.
 The name given to each transformed trace is the original trace name with ``.feature`` prepended.
 These feature files will be loaded during the information leakage analysis.
@@ -127,6 +127,10 @@ python classifier/rf.py --features "${FEATURE_PATH}" --output "./benchmark.txt" 
 ## References
 [1] Shuai Li, Huajun Guo, and Nicholas Hopper. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In ACM Conference on Computer and Communications Security, 2018.
 
-[2] https://github.com/s0irrlor7m/InfoLeakWebsiteFingerprint
+[2] Mohammad Saidur Rahman, Payap Sirinam, Nate Mathews, Kantha Girish Gangadhara, and Matthew Wright. 
+    Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks. 
+    In Proceedings of the Privacy Enhancing Technologies Symposium (PETS), 2020.
 
-[3] Tao Wang. Website fingerprinting: attacks and defenses. PhD thesis, University of Waterloo, 2016.
+[3] https://github.com/s0irrlor7m/InfoLeakWebsiteFingerprint
+
+[4] Tao Wang. Website fingerprinting: attacks and defenses. PhD thesis, University of Waterloo, 2016.
