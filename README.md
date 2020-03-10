@@ -1,7 +1,14 @@
 ## Notice
-If you use this project in your paper, please include the following paper(s) as citations:
 
-> Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI:10.1145/3243734.3243832
+This is a ***re-implementation*** of WeFDE [1] framework to measure information leakage for the paper ***Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks*** accepted in **Privacy Enhancing Technologies Symposium (PETS) 2020**.
+
+If you use this implementation in your paper, please include the following papers as citations:
+
+```
+[1] Shuai Li, Huajun Guo, and Nicholas Hopper. 2018. Measuring Information Leakage in Website Fingerprinting Attacks and Defenses. In Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security (CCS '18). ACM, New York, NY, USA, 1977-1992. DOI:10.1145/3243734.3243832
+
+[2] Mohammad Saidur Rahman, Payap Sirinam, Nate Mathews, Kantha Girish Gangadhara, and Matthew Wright. 2020. Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks. In Proceedings of the Privacy Enhancing Technologies Symposium (PETS), Montréal, Canada.
+```
 
 ## Introduction
 
