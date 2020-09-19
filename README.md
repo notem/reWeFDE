@@ -5,7 +5,7 @@ This is a ***re-implementation*** of WeFDE [1] framework to measure information 
 If you use this implementation in your paper, please include the following papers as citations:
 
 ```
-[1] @inproceedings{li2018measuring,
+@inproceedings{li2018measuring,
       title={Measuring information leakage in website fingerprinting attacks and defenses},
       author={Li, Shuai and Guo, Huajun and Hopper, Nicholas},
       booktitle={Proceedings of the 2018 ACM SIGSAC Conference on Computer and Communications Security},
@@ -15,7 +15,7 @@ If you use this implementation in your paper, please include the following paper
 
 
 
-[2] @article{rahman2020tik,
+@article{rahman2020tik,
        title={{Tik-Tok}: The utility of packet timing in website fingerprinting attacks},
       author={Rahman, Mohammad Saidur and Sirinam, Payap and Mathews, Nate and Gangadhara, Kantha Girish and Wright, Matthew},
       journal={Proceedings on Privacy Enhancing Technologies},
