@@ -16,7 +16,7 @@ If you use this implementation in your paper, please include the following paper
 
 
 @article{rahman2020tik,
-       title={{Tik-Tok}: The utility of packet timing in website fingerprinting attacks},
+      title={{Tik-Tok}: The utility of packet timing in website fingerprinting attacks},
       author={Rahman, Mohammad Saidur and Sirinam, Payap and Mathews, Nate and Gangadhara, Kantha Girish and Wright, Matthew},
       journal={Proceedings on Privacy Enhancing Technologies},
       volume={2020},
