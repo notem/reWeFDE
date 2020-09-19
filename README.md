@@ -1,6 +1,6 @@
 ## Notice
 
-This is a ***re-implementation*** of WeFDE [1] framework to measure information leakage for the paper ***Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks*** [2] accepted in **Privacy Enhancing Technologies Symposium (PETS) 2020**. [Read the Paper](https://arxiv.org/pdf/1902.06421.pdf). [GitHub of Tik-Tok](https://github.com/msrocean/Tik_Tok/) paper. 
+This is a ***re-implementation*** of WeFDE [1] framework to measure information leakage for the paper ***Tik-Tok: The Utility of Packet Timing in Website Fingerprinting Attacks*** [2] accepted in **Privacy Enhancing Technologies Symposium (PETS) 2020**. [Read the Paper](https://content.sciendo.com/view/journals/popets/2020/3/article-p5.xml). [GitHub of Tik-Tok](https://github.com/msrocean/Tik_Tok/) paper. 
 
 If you use this implementation in your paper, please include the following papers as citations:
 
